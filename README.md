@@ -4,10 +4,11 @@ An internal assistant that answers natural-language HR and payroll questions —
 *"How many vacation days carry over into next year?"* — grounded in a
 company's own policy documents, with answers traceable back to source text.
 
-**Status: Phase 2 — Backend rigor.** Real document ingestion, retrieval with
-citations, conversation history/feedback, JWT/RBAC auth, Redis-backed
-caching, and multi-turn conversation memory are all working end-to-end.
-Async ingestion and the Angular UI come in later phases.
+**Status: Phase 3 — Production patterns.** Real document ingestion, retrieval
+with citations, conversation history/feedback, JWT/RBAC auth, Redis-backed
+caching, multi-turn conversation memory, async ingestion via SQS,
+cost/latency observability, and a Testcontainers integration test are all
+working end-to-end. The Angular UI is the last remaining phase.
 
 ## Architecture
 
@@ -17,22 +18,33 @@ Angular chat UI (later)  --->  Spring Boot API (Spring AI ChatClient)
                           +-------------+-------------+
                           |                           |
                  POST /api/documents           POST /api/chat
-                          |                           |
-                 Tika parse -> chunk         QuestionAnswerAdvisor
-                 (overlapping token          similarity search --> PostgreSQL + pgvector
-                  splitter) -> embed                  |
+                 (202, status QUEUED)                  |
+                          |                   QuestionAnswerAdvisor
+                          v                   similarity search --> PostgreSQL + pgvector
+                 SQS (LocalStack)                      |
                           |                    generation --> Ollama (llama3.2)
-                          v                           |
-                 PostgreSQL + pgvector        citations + conversation/message
-                 (chunks + embeddings)        history persisted (JPA/Postgres)
+                          v                             |
+              SqsIngestionPoller              citations + conversation/message
+              (background, long-polling)      history persisted (JPA/Postgres)
+                          |
+                 Tika parse -> chunk
+                 (overlapping token
+                  splitter) -> embed
+                          |
+                          v
+                 PostgreSQL + pgvector
+                 (chunks + embeddings)
 
 Embeddings: Ollama nomic-embed-text (768 dims), served by a local Ollama daemon
+Metrics: Micrometer -> Actuator (/actuator/metrics, /actuator/prometheus)
 ```
 
 - **Backend**: Java 21, Spring Boot 4, Spring AI 2 (`backend/`)
 - **Vector store**: PostgreSQL with the `pgvector` extension
-- **Relational data**: documents, conversations, messages, citations, and
-  feedback are plain JPA entities in the same Postgres instance
+- **Relational data**: documents, conversations, messages, citations,
+  feedback, and users are plain JPA entities in the same Postgres instance
+- **Queue**: SQS via LocalStack (free, no AWS account) — plain AWS SDK v2
+  `SqsClient`, not Spring Cloud AWS (see "Design decisions")
 - **LLM + embeddings**: local Ollama (`llama3.2` for chat, `nomic-embed-text`
   for embeddings) — free, no cloud account. Amazon Bedrock (Claude + Titan)
   remains a documented, config-only swap (see "Switching back to Bedrock")
@@ -60,10 +72,42 @@ Embeddings: Ollama nomic-embed-text (768 dims), served by a local Ollama daemon
   it — pulled straight off `QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS` in the
   `ChatResponse` metadata, so citations are what was *actually* used, not a
   re-derived guess.
-- **Ingestion is synchronous for now**: `POST /api/documents` parses, chunks,
-  embeds, and stores within the request. The `status` field
-  (`PROCESSING`/`INDEXED`/`FAILED`) already models the async case so Phase
-  3's SQS-based pipeline can slot in later without changing the API shape.
+- **Async ingestion (SQS via LocalStack)**: `POST /api/documents` now
+  persists the upload (status `QUEUED`) and returns `202 Accepted`
+  immediately; a background poller (`SqsIngestionPoller`, long-polling
+  `receiveMessage`) does the actual parse/chunk/embed/store work. Uses the
+  plain AWS SDK v2 `SqsClient` directly, not the Spring Cloud AWS SQS
+  starter (`@SqsListener`) — that starter's confirmed compatibility only
+  goes up to Spring Boot 3.2.x, and this project is on the very recent
+  Spring Boot 4.1.0. The SDK client itself has zero Spring Boot version
+  coupling, so this sidesteps the risk entirely (the same reasoning as
+  hand-rolling JWT over a heavier framework piece in Phase 2). No S3: raw
+  upload bytes are stashed in a new `hr_document.content bytea` column so
+  the background consumer has something to process after the HTTP request
+  completes — S3 (via LocalStack too) would be the production-shaped
+  choice, kept out to avoid a second AWS service in an already-large phase.
+  No retry/DLQ either: a failed message is still deleted (status becomes
+  `FAILED`, visible via `GET /api/documents/{id}`) rather than redelivered
+  — a natural "what would you add next" answer, not a gap to hide.
+- **Observability**: `ChatService.ask()` records a Micrometer `Timer`
+  (`chat.request.latency`, tagged `cache=hit|miss`) and token/cost counters
+  (`chat.tokens{type=prompt|completion}`, `chat.cost.usd`) via Actuator.
+  Ollama itself is free, so the cost figure is illustrative — computed from
+  a configurable `$/1k tokens` rate — the point is proving the
+  instrumentation exists for when a paid provider (e.g. Bedrock) is swapped
+  back in. Cache hits record zero token/cost metrics, honestly reflecting
+  that no model call happened.
+- **Testcontainers**: one integration test spins up a *real*
+  Postgres+pgvector container (per the spec's explicit ask) and asserts
+  ingestion produces the right chunk count and that a similarity search for
+  the seeded question returns the correct chunk as the top hit — a
+  deterministic, testable claim, unlike asserting on generated LLM prose. A
+  throwaway Redis container is included too so the full app context boots
+  cleanly and hermetically; SQS is mocked (the test calls
+  `processQueuedDocument()` directly rather than going through the queue).
+  Embeddings still use the host's already-required Ollama daemon rather
+  than `testcontainers-ollama`, to avoid pulling model weights on every
+  test run — a fully hermetic CI setup would add that module later.
 - **Local-first model provider**: Ollama needs no account, no card, and no
   internet after the models are pulled — see "Switching back to Bedrock" for
   why this doesn't cost the project its cloud-AI story.
@@ -101,7 +145,7 @@ Embeddings: Ollama nomic-embed-text (768 dims), served by a local Ollama daemon
 ## Prerequisites
 
 - Java 21
-- Docker Desktop (for Postgres + pgvector, and now Redis)
+- Docker Desktop (for Postgres + pgvector, Redis, and now LocalStack)
 - [Ollama](https://ollama.com) running locally, with the two models pulled:
   ```bash
   ollama pull llama3.2
@@ -143,7 +187,9 @@ either role.
 
 ### 1. Upload a document
 
-A sample policy document is included at `sample-data/leave-policy.txt`:
+A sample policy document is included at `sample-data/leave-policy.txt`.
+Ingestion is async now, so the response comes back immediately with status
+`QUEUED`:
 
 ```bash
 curl -F "file=@sample-data/leave-policy.txt" \
@@ -151,10 +197,17 @@ curl -F "file=@sample-data/leave-policy.txt" \
   localhost:8080/api/documents
 ```
 ```json
-{"id":"...", "filename":"leave-policy.txt", "status":"INDEXED", "chunkCount":1, ...}
+{"id":"...", "filename":"leave-policy.txt", "status":"QUEUED", "chunkCount":null, ...}
+```
+```
+HTTP/1.1 202 Accepted
 ```
 
-### 2. Check its status
+### 2. Poll its status
+
+A background poller picks the message off the SQS (LocalStack) queue within
+a second or two and processes it — `QUEUED` → `PROCESSING` → `INDEXED` (or
+`FAILED`, with `errorMessage` set, if parsing failed):
 
 ```bash
 curl -H "Authorization: Bearer <token>" localhost:8080/api/documents/{id}
@@ -197,6 +250,30 @@ curl -X POST localhost:8080/api/chat/{messageId}/feedback \
   -d '{"rating":"UP"}'
 ```
 
+## Metrics
+
+```bash
+curl localhost:8080/actuator/metrics/chat.request.latency
+curl localhost:8080/actuator/metrics/chat.tokens
+curl localhost:8080/actuator/metrics/chat.cost.usd
+curl localhost:8080/actuator/prometheus   # Prometheus-scrape-ready format
+```
+
+`/actuator/**` is left open (no auth) for local dev/demo convenience — a
+real deployment would put it behind a separate management port or network
+policy rather than leave it public.
+
+## Running tests
+
+```bash
+cd backend
+./mvnw test
+```
+
+`IngestionPgVectorIntegrationTest` spins up real Postgres+pgvector (and a
+throwaway Redis) via Testcontainers, independent of the dev database, and
+needs Docker running — nothing else from the dev stack needs to be up.
+
 ## Switching back to Bedrock
 
 Phase 0 originally targeted Amazon Bedrock (Claude for generation, Titan for
@@ -211,6 +288,4 @@ are provider-agnostic.
 
 ## Roadmap
 
-- **Phase 3** — async ingestion via SQS, cost/latency observability,
-  Testcontainers integration tests.
 - **Phase 4** — Angular chat UI, Docker, CI/CD, AWS deployment.

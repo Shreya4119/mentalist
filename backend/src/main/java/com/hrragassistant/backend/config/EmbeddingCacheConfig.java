@@ -8,18 +8,27 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
 public class EmbeddingCacheConfig {
 
+    /**
+     * A typed Jackson2JsonRedisSerializer (bound to float[].class), not
+     * GenericJackson2JsonRedisSerializer -- the generic one relies on Jackson's
+     * polymorphic default-typing to know what to deserialize into, but arrays
+     * don't get that type wrapper on write (they're unambiguous to the
+     * writer), while a generic Object-typed read demands it. That
+     * write/read asymmetry corrupts round-trips for raw array values, so a
+     * serializer with a fixed known target type on both sides is required.
+     */
     @Bean
     RedisTemplate<String, float[]> embeddingRedisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, float[]> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
         template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setValueSerializer(new Jackson2JsonRedisSerializer<>(float[].class));
         template.afterPropertiesSet();
         return template;
     }

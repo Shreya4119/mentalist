@@ -1,5 +1,6 @@
 package com.hrragassistant.backend.ingestion;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -25,18 +26,14 @@ public class DocumentController {
     }
 
     @PostMapping("/api/documents")
-    public ResponseEntity<DocumentResponse> upload(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<DocumentResponse> upload(@RequestParam("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded file is empty");
         }
 
-        HrDocument hrDocument = ingestionService.ingest(file);
+        HrDocument hrDocument = ingestionService.enqueue(file);
 
-        HttpStatus status = hrDocument.getStatus() == DocumentStatus.FAILED
-                ? HttpStatus.UNPROCESSABLE_ENTITY
-                : HttpStatus.CREATED;
-
-        return ResponseEntity.status(status).body(DocumentResponse.from(hrDocument));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(DocumentResponse.from(hrDocument));
     }
 
     @GetMapping("/api/documents/{id}")

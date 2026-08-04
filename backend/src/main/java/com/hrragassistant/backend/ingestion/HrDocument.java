@@ -24,6 +24,15 @@ public class HrDocument {
     @Column(nullable = false)
     private DocumentStatus status;
 
+    /**
+     * Raw upload bytes, held here so the background SQS consumer has something
+     * to process after the HTTP request completes. A production system would
+     * use S3 for this; kept in Postgres to avoid a second AWS service in this
+     * phase (see README).
+     */
+    @Column(nullable = false, columnDefinition = "bytea")
+    private byte[] content;
+
     private Integer chunkCount;
 
     @Column(columnDefinition = "text")
@@ -37,11 +46,16 @@ public class HrDocument {
     protected HrDocument() {
     }
 
-    public HrDocument(String filename) {
+    public HrDocument(String filename, byte[] content) {
         this.id = UUID.randomUUID();
         this.filename = filename;
-        this.status = DocumentStatus.PROCESSING;
+        this.content = content;
+        this.status = DocumentStatus.QUEUED;
         this.uploadedAt = Instant.now();
+    }
+
+    public void markProcessing() {
+        this.status = DocumentStatus.PROCESSING;
     }
 
     public void markIndexed(int chunkCount) {
@@ -62,6 +76,10 @@ public class HrDocument {
 
     public String getFilename() {
         return filename;
+    }
+
+    public byte[] getContent() {
+        return content;
     }
 
     public DocumentStatus getStatus() {

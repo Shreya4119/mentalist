@@ -45,6 +45,19 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev-only-secret-change-me-1234567890abcdef1234567890abcdef}
     expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+  aws:
+    sqs:
+      endpoint: ${AWS_SQS_ENDPOINT:http://localhost:4566}
+      region: ${AWS_REGION:us-east-1}
+      queue-name: ${AWS_SQS_QUEUE_NAME:document-ingestion}
+  observability:
+    cost-per-1k-tokens-usd: ${COST_PER_1K_TOKENS_USD:0.003}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
 
 logging:
   level:

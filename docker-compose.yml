@@ -17,6 +17,17 @@ services:
     volumes:
       - redisdata:/data
 
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: sqs
+      DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstackdata:/var/lib/localstack
+
 volumes:
   pgdata:
   redisdata:
+  localstackdata:

@@ -24,6 +24,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // Dev/demo convenience -- a real deployment would put actuator behind a
+                        // separate management port or network policy, not leave it public.
+                        .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/documents", "/api/documents/**").hasRole("HR_ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
