@@ -1,0 +1,39 @@
+<div class="login-page">
+  <form class="login-card" (ngSubmit)="submit()">
+    <h1>HR Knowledge Assistant</h1>
+    <p class="subtitle">Sign in to ask questions or manage documents.</p>
+
+    <label>
+      Username
+      <input
+        type="text"
+        name="username"
+        [ngModel]="username()"
+        (ngModelChange)="username.set($event)"
+        required
+        autofocus
+      />
+    </label>
+
+    <label>
+      Password
+      <input
+        type="password"
+        name="password"
+        [ngModel]="password()"
+        (ngModelChange)="password.set($event)"
+        required
+      />
+    </label>
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    <button type="submit" [disabled]="loading()">
+      {{ loading() ? 'Signing in…' : 'Sign in' }}
+    </button>
+
+    <p class="hint">Demo accounts: <code>hr_admin / hr-admin-pass</code> · <code>employee / employee-pass</code></p>
+  </form>
+</div>

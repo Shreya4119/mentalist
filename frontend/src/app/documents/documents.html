@@ -1,0 +1,39 @@
+<div class="documents-page">
+  <h1>Upload a policy document</h1>
+  <p class="subtitle">
+    Only HR admins can upload documents. Files are parsed, chunked, embedded, and indexed
+    asynchronously.
+  </p>
+
+  <div class="upload-card">
+    <input type="file" (change)="onFileSelected($event)" />
+    <button type="button" [disabled]="!selectedFileName() || uploading()" (click)="upload()">
+      {{ uploading() ? 'Uploading…' : 'Upload' }}
+    </button>
+  </div>
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  @if (current(); as doc) {
+    <div class="status-card" [class.failed]="doc.status === 'FAILED'" [class.indexed]="doc.status === 'INDEXED'">
+      <div class="status-row">
+        <span class="filename">{{ doc.filename }}</span>
+        <span class="status-badge">{{ doc.status }}</span>
+      </div>
+
+      @if (doc.status === 'INDEXED') {
+        <p>Indexed into {{ doc.chunkCount }} chunk(s).</p>
+      }
+
+      @if (doc.status === 'FAILED') {
+        <p class="error">{{ doc.errorMessage }}</p>
+      }
+
+      @if (doc.status === 'QUEUED' || doc.status === 'PROCESSING') {
+        <p class="polling">Processing in the background…</p>
+      }
+    </div>
+  }
+</div>

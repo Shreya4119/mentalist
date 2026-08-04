@@ -1,0 +1,67 @@
+<div class="chat-page">
+  <div class="messages">
+    @if (messages().length === 0) {
+      <p class="empty-state">Ask a question about HR or payroll policy to get started.</p>
+    }
+
+    @for (message of messages(); track message.id) {
+      <div class="message" [class.user]="message.role === 'USER'" [class.assistant]="message.role === 'ASSISTANT'">
+        <p class="content">{{ message.content }}</p>
+
+        @if (message.role === 'ASSISTANT') {
+          @if (message.citations.length > 0) {
+            <details class="citations">
+              <summary>{{ message.citations.length }} citation(s)</summary>
+              @for (citation of message.citations; track citation.documentId + '-' + citation.chunkIndex) {
+                <div class="citation">
+                  <div class="citation-source">{{ citation.filename }} (chunk {{ citation.chunkIndex }})</div>
+                  <div class="citation-text">{{ citation.chunkText }}</div>
+                </div>
+              }
+            </details>
+          }
+
+          <div class="feedback">
+            <button
+              type="button"
+              [class.active]="message.feedback === 'UP'"
+              [disabled]="!!message.feedback"
+              (click)="submitFeedback(message, 'UP')"
+            >
+              👍
+            </button>
+            <button
+              type="button"
+              [class.active]="message.feedback === 'DOWN'"
+              [disabled]="!!message.feedback"
+              (click)="submitFeedback(message, 'DOWN')"
+            >
+              👎
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    @if (sending()) {
+      <div class="message assistant pending">Thinking…</div>
+    }
+  </div>
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  <form class="composer" (ngSubmit)="ask()">
+    <input
+      type="text"
+      placeholder="Ask a question…"
+      [ngModel]="question()"
+      (ngModelChange)="question.set($event)"
+      name="question"
+      [disabled]="sending()"
+    />
+    <button type="submit" [disabled]="sending() || !question().trim()">Send</button>
+    <button type="button" class="secondary" (click)="newConversation()">New conversation</button>
+  </form>
+</div>

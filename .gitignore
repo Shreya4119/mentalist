@@ -12,7 +12,7 @@ backend/target/
 .classpath
 .project
 
-# Angular / Node (later phases)
+# Angular / Node
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/

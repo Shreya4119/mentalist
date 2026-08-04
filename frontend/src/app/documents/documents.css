@@ -1,0 +1,84 @@
+.documents-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.documents-page h1 {
+  font-size: 1.3rem;
+  margin: 0 0 0.4rem;
+}
+
+.subtitle {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
+.upload-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+}
+
+.upload-card button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #2f5fda;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload-card button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.status-card {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+}
+
+.status-card.indexed {
+  border-color: #2e9c5b;
+  background: #f1fbf5;
+}
+
+.status-card.failed {
+  border-color: #c0392b;
+  background: #fdf1f0;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.status-badge {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #eee;
+  color: #444;
+}
+
+.polling {
+  color: #888;
+  font-style: italic;
+}
+
+.error {
+  color: #c0392b;
+  font-size: 0.85rem;
+}

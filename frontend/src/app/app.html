@@ -1,0 +1,17 @@
+@if (auth.isAuthenticated()) {
+  <nav class="topbar">
+    <span class="brand">HR Knowledge Assistant</span>
+    <div class="nav-links">
+      <a routerLink="/chat">Chat</a>
+      @if (auth.isHrAdmin()) {
+        <a routerLink="/documents">Documents</a>
+      }
+    </div>
+    <div class="user">
+      <span>{{ auth.username() }} ({{ auth.role() }})</span>
+      <button type="button" (click)="logout()">Log out</button>
+    </div>
+  </nav>
+}
+
+<router-outlet />

@@ -4,16 +4,20 @@ An internal assistant that answers natural-language HR and payroll questions —
 *"How many vacation days carry over into next year?"* — grounded in a
 company's own policy documents, with answers traceable back to source text.
 
-**Status: Phase 3 — Production patterns.** Real document ingestion, retrieval
-with citations, conversation history/feedback, JWT/RBAC auth, Redis-backed
-caching, multi-turn conversation memory, async ingestion via SQS,
-cost/latency observability, and a Testcontainers integration test are all
-working end-to-end. The Angular UI is the last remaining phase.
+**Status: Phase 4 — Angular chat UI.** The full backend (ingestion,
+retrieval with citations, JWT/RBAC, Redis caching, conversation memory,
+async SQS ingestion, observability, Testcontainers) plus a working Angular
+frontend — login, chat with citations/feedback, and HR-admin document
+upload — all run end-to-end in the browser. Docker/CI/CD/AWS deployment for
+the frontend is the only piece left.
 
 ## Architecture
 
 ```
-Angular chat UI (later)  --->  Spring Boot API (Spring AI ChatClient)
+Angular SPA (frontend/, ng serve --> localhost:4200, proxies /api to :8080)
+                                        |
+                                        v
+                                Spring Boot API (Spring AI ChatClient)
                                         |
                           +-------------+-------------+
                           |                           |
@@ -48,7 +52,9 @@ Metrics: Micrometer -> Actuator (/actuator/metrics, /actuator/prometheus)
 - **LLM + embeddings**: local Ollama (`llama3.2` for chat, `nomic-embed-text`
   for embeddings) — free, no cloud account. Amazon Bedrock (Claude + Titan)
   remains a documented, config-only swap (see "Switching back to Bedrock")
-- **Frontend**: Angular — not built yet (Phase 4)
+- **Frontend**: Angular 21, standalone components + signals, no NgModules
+  (`frontend/`) — login, chat with citations/feedback, HR-admin document
+  upload with status polling
 
 ## Design decisions
 
@@ -141,6 +147,25 @@ Metrics: Micrometer -> Actuator (/actuator/metrics, /actuator/prometheus)
   prior turns, so follow-ups actually have context. New conversations skip
   this entirely (nothing to load) and are the only ones eligible for answer
   caching.
+- **Frontend/backend integration — dev-server proxy, not CORS**: the Angular
+  dev server proxies `/api/**` to `localhost:8080` (`frontend/proxy.conf.json`),
+  so browser requests are same-origin during `ng serve` and `SecurityConfig`
+  needed zero changes for this phase. The app calls relative `/api/...`
+  paths throughout, which also keeps it deployment-flexible — a real deploy
+  would serve both from one origin or a reverse proxy rather than needing
+  CORS at all.
+- **Frontend auth**: the JWT lives in `localStorage` (survives reloads; the
+  tradeoff is XSS exposure vs. an httpOnly cookie, which would need backend
+  changes too — reasonable for a demo app, not silently accepted). A
+  functional `authInterceptor` attaches the bearer token and treats any
+  401/403 as "session invalid" (logout + redirect to `/login`); a
+  functional `authGuard`/`hrAdminGuard` pair gates routes by
+  authentication/role. There's no refresh-token flow — the JWT expires
+  after 1 hour and the interceptor's 401/403 handling is what catches that,
+  not a silent refresh.
+- **No conversation-list UI**: one active conversation per browser session,
+  matching the spec's literal "Angular chat UI" ask and the fact that the
+  backend has no endpoint to enumerate a user's past conversations anyway.
 
 ## Prerequisites
 
@@ -250,6 +275,20 @@ curl -X POST localhost:8080/api/chat/{messageId}/feedback \
   -d '{"rating":"UP"}'
 ```
 
+## Running the frontend
+
+With the backend already running (previous section) and Docker/Ollama up:
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Opens at `http://localhost:4200`, proxying `/api/**` to the backend on
+`:8080` (see `proxy.conf.json`). Log in with either demo account from the
+table above — the "Documents" nav link only appears for `hr_admin`.
+
 ## Metrics
 
 ```bash
@@ -288,4 +327,5 @@ are provider-agnostic.
 
 ## Roadmap
 
-- **Phase 4** — Angular chat UI, Docker, CI/CD, AWS deployment.
+- **Remaining**: Dockerize the frontend, CI/CD, AWS deployment (the
+  "Docker, CI/CD, AWS deployment" part of Phase 4 not covered above).
