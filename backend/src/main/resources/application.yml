@@ -7,10 +7,19 @@ spring:
     username: hrrag
     password: hrrag
 
+  jpa:
+    hibernate:
+      ddl-auto: update
+
   docker:
     compose:
       file: ../docker-compose.yml
       lifecycle-management: start-and-stop
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
 
   ai:
     ollama:
