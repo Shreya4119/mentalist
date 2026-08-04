@@ -1,0 +1,76 @@
+# Runs the ENTIRE stack in containers -- backend, frontend, Postgres+pgvector,
+# Redis, LocalStack -- with one command. Separate from docker-compose.yml,
+# which stays dev-infra-only (that one is auto-managed by Spring Boot's own
+# docker-compose lifecycle during `mvn spring-boot:run` / `ng serve` dev).
+#
+# Ollama is intentionally NOT containerized here (consistent with every
+# other phase) -- it's expected to already be running on the host, reached
+# via host.docker.internal.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   open http://localhost:8081
+#
+# Uses an explicit project name so its containers/volumes never collide with
+# docker-compose.yml's (which otherwise share the same default project name
+# derived from the directory) -- confirmed necessary: without this, `up`
+# recreated the dev stack's db/redis/localstack containers in place rather
+# than creating separate ones.
+name: hr-rag-assistant-prod
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: hrrag
+      POSTGRES_USER: hrrag
+      POSTGRES_PASSWORD: hrrag
+    volumes:
+      - proddata_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    volumes:
+      - proddata_redis:/data
+
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: sqs
+      DEFAULT_REGION: us-east-1
+    volumes:
+      - proddata_localstack:/var/lib/localstack
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      - db
+      - redis
+      - localstack
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/hrrag
+      SPRING_DATASOURCE_USERNAME: hrrag
+      SPRING_DATASOURCE_PASSWORD: hrrag
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AWS_SQS_ENDPOINT: http://localstack:4566
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+volumes:
+  proddata_pg:
+  proddata_redis:
+  proddata_localstack:

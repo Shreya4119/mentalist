@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars and fill in real values -- never commit the
+# actual tfvars file (it's gitignored). db_password and jwt_secret have no
+# defaults on purpose; Terraform will refuse to plan/apply without them.
+
+db_password = "generate-a-real-random-value"
+jwt_secret  = "generate-a-real-random-value-at-least-32-bytes"
+
+# aws_region        = "us-east-1"
+# backend_image_tag = "latest"

@@ -4,12 +4,14 @@ An internal assistant that answers natural-language HR and payroll questions —
 *"How many vacation days carry over into next year?"* — grounded in a
 company's own policy documents, with answers traceable back to source text.
 
-**Status: Phase 4 — Angular chat UI.** The full backend (ingestion,
+**Status: complete (all planned phases).** The full backend (ingestion,
 retrieval with citations, JWT/RBAC, Redis caching, conversation memory,
 async SQS ingestion, observability, Testcontainers) plus a working Angular
-frontend — login, chat with citations/feedback, and HR-admin document
-upload — all run end-to-end in the browser. Docker/CI/CD/AWS deployment for
-the frontend is the only piece left.
+frontend all run end-to-end in the browser, both Docker images build and
+run as a complete containerized stack, a GitHub Actions CI/CD pipeline is
+written (unverified until pushed — see "CI/CD"), and the target AWS
+deployment is fully expressed as validated Terraform without ever spending
+a dollar on it (see `deploy/DEPLOYMENT.md`).
 
 ## Architecture
 
@@ -166,6 +168,29 @@ Metrics: Micrometer -> Actuator (/actuator/metrics, /actuator/prometheus)
 - **No conversation-list UI**: one active conversation per browser session,
   matching the spec's literal "Angular chat UI" ask and the fact that the
   backend has no endpoint to enumerate a user's past conversations anyway.
+- **Two docker-compose files, not one**: `docker-compose.yml` stays
+  dev-infra-only (Postgres/Redis/LocalStack, auto-managed by Spring Boot's
+  own docker-compose lifecycle during `mvn spring-boot:run`).
+  `docker-compose.prod.yml` is a separate, complete containerized stack
+  (backend + frontend + infra) — different purpose, different lifecycle,
+  shouldn't be conflated. It uses an explicit Compose project name
+  (confirmed necessary — without it, the two files' same-named services
+  collided under the directory-derived default project name and `up`
+  recreated the dev stack's containers in place instead of creating
+  separate ones).
+- **AWS deployment is docs/Terraform-only, never applied**: consistent
+  with every other cost-avoidance decision in this project (Ollama instead
+  of Bedrock, LocalStack instead of real SQS) — no AWS account was ever
+  needed to build or run this. `deploy/terraform/` is validated with
+  `terraform validate` against the real AWS provider schema (confirmed
+  clean), not just written and hoped; `deploy/DEPLOYMENT.md` covers what it
+  provisions and what's simplified (default VPC, no Multi-AZ, etc).
+- **CI publishes to GHCR, not ECR**: pushing to ECR from CI would need AWS
+  credentials as GitHub secrets, which doesn't fit "no AWS account." GHCR
+  needs zero setup (the built-in `GITHUB_TOKEN`) and still proves the full
+  build → test → publish pipeline. `.github/workflows/ci.yml` is
+  unverified in the sense that it's never actually run — this repo has no
+  GitHub remote — but is written to current, confirmed action versions.
 
 ## Prerequisites
 
@@ -313,6 +338,54 @@ cd backend
 throwaway Redis) via Testcontainers, independent of the dev database, and
 needs Docker running — nothing else from the dev stack needs to be up.
 
+## Running it fully containerized
+
+No local Java/Maven/Node needed — just Docker and a host-run Ollama
+(consistent with every other phase, Ollama is never containerized):
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Brings up the entire stack (backend, frontend, Postgres+pgvector, Redis,
+LocalStack) under its own Compose project name
+(`hr-rag-assistant-prod`, kept separate from the dev stack on purpose — see
+"Design decisions"). Give the backend ~15–20s to finish booting on first
+run, then:
+
+- Frontend: `http://localhost:8081`
+- Backend directly: `http://localhost:8080`
+
+Verified end-to-end: both images build clean, the full stack starts, login
+and chat work through the containerized frontend's nginx → containerized
+backend → containerized Postgres/Redis/LocalStack → host Ollama via
+`host.docker.internal`.
+
+`docker compose -f docker-compose.prod.yml down` tears it back down.
+
+## CI/CD
+
+`.github/workflows/ci.yml`: compiles and tests the backend (the
+Testcontainers suite runs here too — GitHub-hosted runners have Docker
+preinstalled, no extra setup), builds the frontend, and — only on push to
+`main`, only if both pass — builds and publishes both Docker images to
+GHCR. **Unverified**: this repo has no GitHub remote and there's no local
+Actions runner available, so this workflow has never actually executed.
+Written to each action's real current major version (checked against their
+actual latest GitHub releases, not assumed) and well-established patterns,
+but treat it as needing a first-real-push review, not a proven pipeline.
+
+## AWS deployment
+
+`deploy/DEPLOYMENT.md` documents the target architecture (ECS Fargate
+backend behind an ALB, RDS PostgreSQL with pgvector, ElastiCache Redis,
+real SQS, S3+CloudFront for the frontend, Secrets Manager) and
+`deploy/terraform/` expresses it as Terraform — validated with
+`terraform init && terraform validate` against the real AWS provider
+schema (clean, no errors), never applied against a real account. Same
+reasoning as the Ollama/LocalStack choices throughout this project: prove
+it's deployable without spending anything to prove it.
+
 ## Switching back to Bedrock
 
 Phase 0 originally targeted Amazon Bedrock (Claude for generation, Titan for
@@ -325,7 +398,10 @@ point `spring.ai.bedrock.*` at your AWS region/model, and update
 changes needed — the `ChatModel`/`EmbeddingModel`/`VectorStore` abstractions
 are provider-agnostic.
 
-## Roadmap
+## What a real production deployment would still need
 
-- **Remaining**: Dockerize the frontend, CI/CD, AWS deployment (the
-  "Docker, CI/CD, AWS deployment" part of Phase 4 not covered above).
+Called out explicitly rather than left implicit — see `deploy/DEPLOYMENT.md`
+for the full list: a dedicated VPC (this uses the account's default VPC),
+Multi-AZ/autoscaling, a custom domain + ACM certificate, Flyway/Liquibase in
+place of `ddl-auto=update`, a real user store in place of the two seeded
+demo accounts, and rotating the checked-in dev-only JWT secret.
