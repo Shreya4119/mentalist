@@ -1,0 +1,26 @@
+# Maven / Java
+backend/target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Angular / Node (later phases)
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Env / secrets
+.env
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
