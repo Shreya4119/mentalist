@@ -1,15 +1,21 @@
 package com.hrragassistant.backend.chat;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.document.Document;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,37 +23,78 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ChatService {
 
+    private static final int MEMORY_WINDOW_MESSAGES = 10;
+    private static final Duration ANSWER_CACHE_TTL = Duration.ofHours(6);
+    private static final String ANSWER_CACHE_PREFIX = "chat-answer:";
+
     private final ChatClient chatClient;
     private final ConversationRepository conversationRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final ChatCitationRepository chatCitationRepository;
     private final FeedbackRepository feedbackRepository;
+    private final RedisTemplate<String, CachedAnswer> answerCacheTemplate;
 
     public ChatService(
             ChatClient chatClient,
             ConversationRepository conversationRepository,
             ChatMessageRepository chatMessageRepository,
             ChatCitationRepository chatCitationRepository,
-            FeedbackRepository feedbackRepository) {
+            FeedbackRepository feedbackRepository,
+            RedisTemplate<String, CachedAnswer> answerCacheTemplate) {
         this.chatClient = chatClient;
         this.conversationRepository = conversationRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.chatCitationRepository = chatCitationRepository;
         this.feedbackRepository = feedbackRepository;
+        this.answerCacheTemplate = answerCacheTemplate;
     }
 
+    /**
+     * Stateless (no conversationId) questions are cache-eligible and don't need
+     * prior turns. Continuing an existing conversation always bypasses the cache
+     * and loads prior messages as context -- an identical question can
+     * legitimately have a different answer depending on what was asked before it.
+     */
     public AskResult ask(UUID conversationId, String question) {
+        boolean isNewConversation = conversationId == null;
         UUID resolvedConversationId = resolveConversation(conversationId);
+
+        List<Message> priorMessages = isNewConversation ? List.of() : loadPriorMessages(resolvedConversationId);
 
         chatMessageRepository.save(new ChatMessage(resolvedConversationId, MessageRole.USER, question));
 
-        ChatResponse chatResponse = chatClient.prompt().user(question).call().chatResponse();
-        String answer = chatResponse.getResult().getOutput().getText();
+        CachedAnswer cachedAnswer = isNewConversation ? answerCacheTemplate.opsForValue().get(answerCacheKey(question)) : null;
 
-        ChatMessage assistantMessage = new ChatMessage(resolvedConversationId, MessageRole.ASSISTANT, answer);
-        chatMessageRepository.save(assistantMessage);
+        String answer;
+        List<ChatCitation> citations;
+        ChatMessage assistantMessage;
 
-        List<ChatCitation> citations = extractCitations(chatResponse, assistantMessage.getId());
+        if (cachedAnswer != null) {
+            answer = cachedAnswer.answer();
+            assistantMessage = new ChatMessage(resolvedConversationId, MessageRole.ASSISTANT, answer);
+            chatMessageRepository.save(assistantMessage);
+
+            citations = cachedAnswer.citations().stream()
+                    .map(c -> new ChatCitation(assistantMessage.getId(), c.documentId(), c.filename(), c.chunkIndex(), c.chunkText()))
+                    .toList();
+        } else {
+            ChatResponse chatResponse = chatClient.prompt()
+                    .messages(priorMessages)
+                    .user(question)
+                    .call()
+                    .chatResponse();
+
+            answer = chatResponse.getResult().getOutput().getText();
+            assistantMessage = new ChatMessage(resolvedConversationId, MessageRole.ASSISTANT, answer);
+            chatMessageRepository.save(assistantMessage);
+
+            citations = extractCitations(chatResponse, assistantMessage.getId());
+
+            if (isNewConversation) {
+                cacheAnswer(question, answer, citations);
+            }
+        }
+
         if (!citations.isEmpty()) {
             chatCitationRepository.saveAll(citations);
         }
@@ -108,6 +155,30 @@ public class ChatService {
         return conversationId;
     }
 
+    private List<Message> loadPriorMessages(UUID conversationId) {
+        List<ChatMessage> history = chatMessageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
+
+        int fromIndex = Math.max(0, history.size() - MEMORY_WINDOW_MESSAGES);
+        return history.subList(fromIndex, history.size()).stream()
+                .<Message>map(m -> m.getRole() == MessageRole.USER
+                        ? new UserMessage(m.getContent())
+                        : new AssistantMessage(m.getContent()))
+                .toList();
+    }
+
+    private void cacheAnswer(String question, String answer, List<ChatCitation> citations) {
+        List<CachedCitation> cachedCitations = citations.stream()
+                .map(c -> new CachedCitation(c.getDocumentId(), c.getFilename(), c.getChunkIndex(), c.getChunkText()))
+                .toList();
+
+        answerCacheTemplate.opsForValue().set(
+                answerCacheKey(question), new CachedAnswer(answer, cachedCitations), ANSWER_CACHE_TTL);
+    }
+
+    private static String answerCacheKey(String question) {
+        return ANSWER_CACHE_PREFIX + question.trim().toLowerCase(Locale.ROOT);
+    }
+
     @SuppressWarnings("unchecked")
     private List<ChatCitation> extractCitations(ChatResponse chatResponse, UUID assistantMessageId) {
         List<Document> retrieved = chatResponse.getMetadata().get(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
@@ -140,5 +211,11 @@ public class ChatService {
     }
 
     public record ConversationHistory(UUID conversationId, List<TranscriptMessage> messages) {
+    }
+
+    public record CachedAnswer(String answer, List<CachedCitation> citations) {
+    }
+
+    public record CachedCitation(UUID documentId, String filename, Integer chunkIndex, String chunkText) {
     }
 }

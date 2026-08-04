@@ -4,10 +4,10 @@ An internal assistant that answers natural-language HR and payroll questions —
 *"How many vacation days carry over into next year?"* — grounded in a
 company's own policy documents, with answers traceable back to source text.
 
-**Status: Phase 1 — MVP.** Real document ingestion (upload → chunk → embed →
-store), retrieval-augmented answers with citations, and conversation
-history/feedback are all working end-to-end. Auth, caching, async ingestion,
-and the Angular UI come in later phases.
+**Status: Phase 2 — Backend rigor.** Real document ingestion, retrieval with
+citations, conversation history/feedback, JWT/RBAC auth, Redis-backed
+caching, and multi-turn conversation memory are all working end-to-end.
+Async ingestion and the Angular UI come in later phases.
 
 ## Architecture
 
@@ -64,10 +64,6 @@ Embeddings: Ollama nomic-embed-text (768 dims), served by a local Ollama daemon
   embeds, and stores within the request. The `status` field
   (`PROCESSING`/`INDEXED`/`FAILED`) already models the async case so Phase
   3's SQS-based pipeline can slot in later without changing the API shape.
-- **Conversation history without memory (yet)**: turns are persisted per
-  conversation so `GET /api/chat/{conversationId}` shows a real transcript,
-  but prior turns aren't fed back into the prompt as context — that's Phase
-  2's "conversation memory."
 - **Local-first model provider**: Ollama needs no account, no card, and no
   internet after the models are pulled — see "Switching back to Bedrock" for
   why this doesn't cost the project its cloud-AI story.
@@ -76,11 +72,36 @@ Embeddings: Ollama nomic-embed-text (768 dims), served by a local Ollama daemon
   migration tool (Flyway/Liquibase) is the honest choice once this needs to
   run anywhere besides a laptop, and is a natural Phase 3 addition alongside
   the other "production patterns."
+- **Auth**: hand-rolled JWT (via `jjwt`), not
+  `spring-security-oauth2-resource-server` — that starter targets validating
+  tokens from an *external* identity provider, and this app is both issuer
+  and validator, so a plain `JwtService` + a request filter is the
+  right-sized tool. Two seeded demo accounts (`hr_admin` / `employee`, see
+  below) stand in for a registration flow, which is out of scope — the point
+  of this phase is proving RBAC actually gates `/api/documents/**` to
+  `HR_ADMIN`, not building account management.
+- **Caching vs. conversation memory**: the spec asks for caching "answers for
+  repeated questions," but once memory (this phase) feeds prior turns into
+  the prompt, an identical question can legitimately get a different answer
+  depending on conversation context. Resolution: full answers are cached in
+  Redis only for **stateless, first-turn questions** (no `conversationId` on
+  the request) — the common "many employees ask the same FAQ" case — and the
+  cache is always bypassed once a conversation has follow-up turns.
+  Embeddings, by contrast, are cached unconditionally: they're a pure
+  function of the input text, so there's no such conflict. The embedding
+  cache wraps the `EmbeddingModel` bean itself (`CachingEmbeddingModel`,
+  `@Primary`), so ingestion and retrieval both benefit with no code changes
+  of their own.
+- **Conversation memory**: continuing a conversation loads its last 10
+  persisted messages (5 exchanges) and passes them to the `ChatClient` as
+  prior turns, so follow-ups actually have context. New conversations skip
+  this entirely (nothing to load) and are the only ones eligible for answer
+  caching.
 
 ## Prerequisites
 
 - Java 21
-- Docker Desktop (for Postgres + pgvector)
+- Docker Desktop (for Postgres + pgvector, and now Redis)
 - [Ollama](https://ollama.com) running locally, with the two models pulled:
   ```bash
   ollama pull llama3.2
@@ -94,16 +115,40 @@ cd backend
 ./mvnw spring-boot:run
 ```
 
-This starts Postgres via Docker Compose automatically and initializes the
-pgvector schema (768 dimensions, matching `nomic-embed-text`) plus the JPA
-tables for documents/conversations/messages/citations/feedback.
+This starts Postgres and Redis via Docker Compose automatically, and
+initializes the pgvector schema (768 dimensions, matching
+`nomic-embed-text`) plus the JPA tables for documents, conversations,
+messages, citations, feedback, and users. Two demo accounts are seeded on
+first boot (dev-only, not for anything beyond a laptop):
+
+| Username | Password | Role |
+|---|---|---|
+| `hr_admin` | `hr-admin-pass` | `HR_ADMIN` |
+| `employee` | `employee-pass` | `EMPLOYEE` |
+
+### 0. Log in
+
+```bash
+curl -X POST localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"hr_admin","password":"hr-admin-pass"}'
+```
+```json
+{"token": "eyJ...", "role": "HR_ADMIN"}
+```
+
+Every other endpoint below needs `-H "Authorization: Bearer <token>"`.
+`/api/documents/**` requires an `HR_ADMIN` token; `/api/chat/**` accepts
+either role.
 
 ### 1. Upload a document
 
 A sample policy document is included at `sample-data/leave-policy.txt`:
 
 ```bash
-curl -F "file=@sample-data/leave-policy.txt" localhost:8080/api/documents
+curl -F "file=@sample-data/leave-policy.txt" \
+  -H "Authorization: Bearer <hr_admin token>" \
+  localhost:8080/api/documents
 ```
 ```json
 {"id":"...", "filename":"leave-policy.txt", "status":"INDEXED", "chunkCount":1, ...}
@@ -112,7 +157,7 @@ curl -F "file=@sample-data/leave-policy.txt" localhost:8080/api/documents
 ### 2. Check its status
 
 ```bash
-curl localhost:8080/api/documents/{id}
+curl -H "Authorization: Bearer <token>" localhost:8080/api/documents/{id}
 ```
 
 ### 3. Ask a question
@@ -120,6 +165,7 @@ curl localhost:8080/api/documents/{id}
 ```bash
 curl -X POST localhost:8080/api/chat \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{"question":"How many vacation days carry over into next year?"}'
 ```
 ```json
@@ -131,13 +177,15 @@ curl -X POST localhost:8080/api/chat \
 }
 ```
 
-Pass the returned `conversationId` on a follow-up call to continue the same
-conversation.
+Asking the exact same question again (still with no `conversationId`) comes
+back from the Redis answer cache. Pass the returned `conversationId` on a
+follow-up call to continue the same conversation with memory — and note
+that path always calls the model fresh, never the cache.
 
 ### 4. Read the conversation back
 
 ```bash
-curl localhost:8080/api/chat/{conversationId}
+curl -H "Authorization: Bearer <token>" localhost:8080/api/chat/{conversationId}
 ```
 
 ### 5. Leave feedback on an answer
@@ -145,6 +193,7 @@ curl localhost:8080/api/chat/{conversationId}
 ```bash
 curl -X POST localhost:8080/api/chat/{messageId}/feedback \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{"rating":"UP"}'
 ```
 
@@ -162,7 +211,6 @@ are provider-agnostic.
 
 ## Roadmap
 
-- **Phase 2** — JWT/RBAC security, Redis caching, multi-turn chat memory.
 - **Phase 3** — async ingestion via SQS, cost/latency observability,
   Testcontainers integration tests.
 - **Phase 4** — Angular chat UI, Docker, CI/CD, AWS deployment.

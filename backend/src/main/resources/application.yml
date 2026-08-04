@@ -21,6 +21,11 @@ spring:
       max-file-size: 20MB
       max-request-size: 20MB
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
@@ -35,6 +40,11 @@ spring:
         dimensions: 768
         index-type: hnsw
         distance-type: cosine_distance
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-secret-change-me-1234567890abcdef1234567890abcdef}
+    expiration-ms: ${JWT_EXPIRATION_MS:3600000}
 
 logging:
   level:
