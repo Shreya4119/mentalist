@@ -1,0 +1,139 @@
+@let r = result();
+
+<section class="card" aria-labelledby="hh-health">
+  <div class="health-grid">
+    <div>
+      <h2 class="section-title" id="hh-health">{{ r.individual ? 'Your financial health' : 'Household health' }}<app-info-tip term="householdScore" /></h2>
+      <app-score-band [score]="r.health.score" [rating]="r.health.rating" />
+      <p class="health-summary">{{ r.health.summary }}</p>
+    </div>
+    <div class="dimensions">
+      @for (a of r.health.areas; track a.area) {
+        <div class="dim-row">
+          <span class="dim-label">{{ a.label }}</span>
+          <span class="dim-bar"><span [class]="'dim-fill ' + ratingClass(a.rating)" [style.width.%]="a.score ?? 0"></span></span>
+          <span class="dim-score">{{ a.score === null ? 'n/a' : a.score }}</span>
+        </div>
+      }
+    </div>
+  </div>
+  <details class="how-it-works">
+    <summary>How this score works</summary>
+    <p>
+      Mentalist computes nine ratios from your own numbers with fixed formulas (no AI involved) and rates each one
+      Healthy (100), Caution (60) or Concern (20) against common rules of thumb. Each area's score is the average of its
+      ratios. The overall score weights Safety net 25%, Future 25%, Cash flow 20%, Debt 15% and Investing quality 15%,
+      over the areas you gave numbers for. Bands: Strong 75+, Stable 55–74, Watch 35–54, Weak below 35.
+    </p>
+  </details>
+</section>
+
+<section class="card" aria-labelledby="hh-steps">
+  <h2 class="section-title" id="hh-steps">Your next steps<app-info-tip term="priorityLadder" /></h2>
+  <p class="muted small">
+    Work from the top: each step protects the ones after it.
+    @if (nextStep(); as n) { Start with <strong>{{ n.title }}</strong>. }
+  </p>
+  <ol class="ladder">
+    @for (s of r.priorities; track s.key) {
+      <li [class]="'step ' + s.status.toLowerCase()">
+        <span class="step-mark" aria-hidden="true">{{ stepMark[s.status] || s.number }}</span>
+        <div>
+          <p class="step-title">
+            {{ s.title }}
+            @if (s.status === 'NEXT') { <span class="badge">Next</span> }
+            <span class="sr-only">({{ stepLabel[s.status] }})</span>
+          </p>
+          <p class="step-why">{{ s.why }}</p>
+          <p class="step-detail">{{ s.detail }}</p>
+        </div>
+      </li>
+    }
+  </ol>
+</section>
+
+<section class="card" aria-labelledby="hh-ratios">
+  <h2 class="section-title" id="hh-ratios">Your nine checks</h2>
+  <p class="muted small">
+    Each check shows your number, what it means and one next step. Tap <strong>i</strong> to learn what it means in general.
+  </p>
+  @for (g of groups(); track g.area) {
+    <h3 class="group-title">{{ g.label }} · {{ g.weight }}% of the score</h3>
+    <div class="ratio-list">
+      @for (ratio of g.ratios; track ratio.key) {
+        <div class="ratio-row" [class.na]="ratio.assessment === 'NOT_APPLICABLE'">
+          <div class="ratio-head">
+            <span class="ratio-name">{{ ratio.name }}<app-info-tip [term]="ratio.key" [forCompany]="yourNumbers(ratio)" contextLabel="Your numbers" /></span>
+            <span class="ratio-value">{{ ratio.display }}</span>
+            <app-assessment-chip [value]="ratio.assessment" />
+          </div>
+          <p class="ratio-meaning">{{ ratio.meaning }}</p>
+          @if (ratio.nextStep) {
+            <p class="ratio-next"><strong>Next step:</strong> {{ ratio.nextStep }}</p>
+          }
+          <details class="ratio-calc">
+            <summary>How it's calculated</summary>
+            @if (ratio.formula) { <p><strong>Formula:</strong> {{ ratio.formula }}</p> }
+            <p><strong>Benchmark:</strong> {{ ratio.benchmark }}</p>
+          </details>
+        </div>
+      }
+    </div>
+  }
+</section>
+
+<section class="card" aria-labelledby="hh-goals">
+  <h2 class="section-title" id="hh-goals">Your goals<app-info-tip term="goalsOnTrack" /></h2>
+  @if (r.goals.length === 0) {
+    <p class="muted">No goals yet. Add a home deposit, education, a car or a sabbatical to see whether you are on track.</p>
+  } @else {
+    <div class="goal-list">
+      @for (g of r.goals; track $index) {
+        <article class="goal" [attr.aria-label]="g.name">
+          <div class="goal-head">
+            <div>
+              <p class="goal-name">{{ g.name }}</p>
+              <p class="goal-meta">
+                By {{ g.targetYear }} · {{ g.bucketLabel }}<app-info-tip term="goalBuckets" />
+              </p>
+            </div>
+            <span [class]="'goal-status ' + (g.onTrack ? 'on' : 'behind')">
+              <span aria-hidden="true">{{ g.onTrack ? '✓' : '!' }}</span> {{ g.onTrack ? 'On track' : 'Behind' }}
+            </span>
+          </div>
+          <div class="goal-bar" role="img"
+               [attr.aria-label]="'Projected ' + progress(g.projected, g.targetInFuture) + '% of the target'">
+            <span [class]="'goal-fill' + (g.onTrack ? ' on' : '')" [style.width.%]="progress(g.projected, g.targetInFuture)"></span>
+          </div>
+          <p class="goal-summary">{{ g.summary }}</p>
+          <dl class="goal-facts">
+            <dt>Target in today's money</dt><dd>€{{ g.targetToday | number: '1.0-0' }}</dd>
+            <dt>Target with inflation<app-info-tip term="inflationAdjusted" /></dt><dd>€{{ g.targetInFuture | number: '1.0-0' }}</dd>
+            <dt>Saving now</dt><dd>€{{ g.monthlyContribution | number: '1.0-0' }} / month</dd>
+            <dt>Needed to stay on track</dt><dd>€{{ g.monthlyNeeded | number: '1.0-0' }} / month</dd>
+          </dl>
+        </article>
+      }
+    </div>
+  }
+  <p class="muted small">
+    Assumptions: inflation {{ r.assumptions.inflationPct }}% a year; yearly returns Safe {{ r.assumptions.safeReturnPct }}%,
+    Balanced {{ r.assumptions.balancedReturnPct }}%, Growth {{ r.assumptions.growthReturnPct }}%. {{ r.assumptions.note }}
+  </p>
+</section>
+
+<section class="card" aria-labelledby="hh-notes">
+  <h2 class="section-title" id="hh-notes">Rules for {{ r.countryName }}</h2>
+  @for (n of r.notes; track n.key) {
+    <div class="note">
+      <h3>{{ n.title }}</h3>
+      <p>{{ n.text }}</p>
+      @if (n.source) {
+        <p class="small"><a [href]="n.source.url" target="_blank" rel="noopener">Source: {{ n.source.label }}</a></p>
+      }
+    </div>
+  }
+  <p class="muted small">Country rules last checked on {{ r.rulesVerifiedOn }}.</p>
+</section>
+
+<p class="disclaimer" role="note">{{ r.disclaimer }}</p>

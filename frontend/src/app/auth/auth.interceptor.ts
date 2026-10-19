@@ -5,12 +5,10 @@ import { catchError, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 
 /**
- * Any 401/403 is treated as "session invalid, go log in again." The backend
- * also returns 403 for role-mismatched requests (Spring Security's default
- * entry point doesn't distinguish "unauthenticated" from "wrong role"), but
- * the route guards below already keep the UI from ever sending a
- * role-mismatched request in normal use -- so in practice any 403 reaching
- * here really does mean the token is missing/invalid/expired.
+ * Only 401 means "session invalid, go log in again" -- the backend returns
+ * 401 for a missing/invalid/expired token and 403 for a wrong role, and lets
+ * 400/404/413 through with their real status. Logging out on 403 (or on any
+ * error) would kick the user out for an ordinary failed request.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -21,7 +19,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(authorizedReq).pipe(
     catchError((error: unknown) => {
-      const isAuthFailure = error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403);
+      const isAuthFailure = error instanceof HttpErrorResponse && error.status === 401;
       const isLoginRequest = req.url.includes('/api/auth/login');
 
       if (isAuthFailure && !isLoginRequest) {

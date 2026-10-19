@@ -7,25 +7,54 @@ import java.util.UUID;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.hrragassistant.backend.ingestion.DocumentKind;
+import com.hrragassistant.backend.ingestion.DocumentStatus;
+import com.hrragassistant.backend.reports.FinancialReportAnalysisRepository;
+import com.hrragassistant.backend.reports.ReportAnalysisStatus;
+import com.hrragassistant.backend.ingestion.StoredDocument;
+import com.hrragassistant.backend.ingestion.StoredDocumentRepository;
 
 @RestController
 public class ChatController {
 
     private final ChatService chatService;
+    private final StoredDocumentRepository documentRepository;
+    private final FinancialReportAnalysisRepository analysisRepository;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, StoredDocumentRepository documentRepository,
+                          FinancialReportAnalysisRepository analysisRepository) {
         this.chatService = chatService;
+        this.documentRepository = documentRepository;
+        this.analysisRepository = analysisRepository;
     }
 
     @PostMapping("/api/chat")
     public ChatAnswerResponse ask(@Valid @RequestBody ChatRequest request) {
-        ChatService.AskResult result = chatService.ask(request.conversationId(), request.question());
+        // Every question is about exactly one financial report.
+        StoredDocument document = documentRepository.findById(request.documentId())
+                .filter(d -> d.getKind() == DocumentKind.FINANCIAL_REPORT)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Report not found: " + request.documentId()));
+        DocumentStatus status = document.getStatus();
+        // A report is chat-ready as soon as its AI analysis is done: the analysis digest is
+        // indexed straight away, while the full text of a long annual report may still be
+        // embedding in the background.
+        boolean reportAnalysed = analysisRepository.findByDocumentId(document.getId())
+                .map(a -> a.getStatus() == ReportAnalysisStatus.COMPLETED)
+                .orElse(false);
+        if (status != DocumentStatus.INDEXED && !reportAnalysed) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Report is not ready for questions yet (status " + status + ")");
+        }
+
+        ChatService.AskResult result = chatService.ask(request.conversationId(), request.question(), request.documentId());
 
         return new ChatAnswerResponse(
                 result.conversationId(),
@@ -56,7 +85,8 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
-    public record ChatRequest(UUID conversationId, @NotBlank String question) {
+    /** documentId (a report id) is required: retrieval is always limited to that one report. */
+    public record ChatRequest(UUID conversationId, @NotBlank String question, @NotNull UUID documentId) {
     }
 
     public record FeedbackRequest(@NotNull FeedbackRating rating) {

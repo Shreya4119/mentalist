@@ -1,0 +1,18 @@
+# Groq (free tier) for chat, via its OpenAI-compatible endpoint.
+# Run with:  GROQ_API_KEY=... ./mvnw spring-boot:run -Dspring-boot.run.profiles=groq
+# Get a key at https://console.groq.com/keys
+#
+# Free tier has tight per-minute request/token limits -- pace bulk evaluation runs.
+spring:
+  ai:
+    model:
+      chat: openai
+    openai:
+      base-url: https://api.groq.com/openai/v1
+      api-key: ${GROQ_API_KEY}
+      chat:
+        model: ${GROQ_CHAT_MODEL:llama-3.3-70b-versatile}
+
+app:
+  observability:
+    cost-per-1k-tokens-usd: 0

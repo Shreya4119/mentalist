@@ -1,7 +1,25 @@
+<div class="chat-page-wrapper">
 <div class="chat-page">
-  <div class="messages">
+  <div class="scope-banner">
+    @if (scopedDocument(); as doc) {
+      <a [routerLink]="['/reports', doc.id]">← Back to the analysis</a>
+    } @else {
+      <a routerLink="/reports">← Financial reports</a>
+    }
+    @if (scopedDocument(); as doc) {
+      <span class="scope-label">Asking about <strong>{{ doc.filename }}</strong></span>
+    } @else if (!scopeError()) {
+      <span class="scope-label">Loading report…</span>
+    }
+  </div>
+
+  <div class="messages" #messagesEl aria-live="polite">
     @if (messages().length === 0) {
-      <p class="empty-state">Ask a question about HR or payroll policy to get started.</p>
+      <p class="empty-state">
+        @if (scopedDocument(); as doc) {
+          Ask a question about {{ doc.filename }}. Answers come only from this report and its analysis.
+        }
+      </p>
     }
 
     @for (message of messages(); track message.id) {
@@ -27,6 +45,8 @@
               [class.active]="message.feedback === 'UP'"
               [disabled]="!!message.feedback"
               (click)="submitFeedback(message, 'UP')"
+              aria-label="Helpful answer"
+              title="Helpful answer"
             >
               👍
             </button>
@@ -35,6 +55,8 @@
               [class.active]="message.feedback === 'DOWN'"
               [disabled]="!!message.feedback"
               (click)="submitFeedback(message, 'DOWN')"
+              aria-label="Not helpful"
+              title="Not helpful"
             >
               👎
             </button>
@@ -49,19 +71,21 @@
   </div>
 
   @if (error()) {
-    <p class="error">{{ error() }}</p>
+    <p class="error" role="alert">{{ error() }}</p>
   }
 
   <form class="composer" (ngSubmit)="ask()">
     <input
       type="text"
       placeholder="Ask a question…"
+      aria-label="Your question"
       [ngModel]="question()"
       (ngModelChange)="question.set($event)"
       name="question"
-      [disabled]="sending()"
+      [disabled]="sending() || scopeError()"
     />
-    <button type="submit" [disabled]="sending() || !question().trim()">Send</button>
+    <button type="submit" [disabled]="!canSend()">Send</button>
     <button type="button" class="secondary" (click)="newConversation()">New conversation</button>
   </form>
+</div>
 </div>

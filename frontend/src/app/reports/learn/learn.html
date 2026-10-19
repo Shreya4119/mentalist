@@ -1,0 +1,187 @@
+<div class="learn-page" [class.wide]="view() === 'lessons'">
+  <a routerLink="/reports" class="back-link">← Financial reports</a>
+
+  <header>
+    <h1>Learn the basics</h1>
+    <p class="subtitle">
+      Short illustrated lessons on reading company reports and running your own money, with everyday examples.
+      No finance background needed.
+    </p>
+  </header>
+
+  <nav class="view-tabs" aria-label="Learn sections">
+    <a [routerLink]="[]" [queryParams]="{}" [class.active]="view() === 'lessons'"
+       [attr.aria-current]="view() === 'lessons' ? 'page' : null">Lessons</a>
+    <a [routerLink]="[]" [queryParams]="{ view: 'terms' }" [class.active]="view() === 'terms'"
+       [attr.aria-current]="view() === 'terms' ? 'page' : null">All terms</a>
+  </nav>
+
+  @if (view() === 'terms') {
+    <div class="search">
+      <input type="search" [ngModel]="query()" (ngModelChange)="query.set($event)" placeholder="Search terms, e.g. debt, cash, margin"
+             aria-label="Search the glossary" />
+      <span class="muted" aria-live="polite">{{ count() }} term{{ count() === 1 ? '' : 's' }}</span>
+    </div>
+
+    @for (g of groups(); track g.name) {
+      <section class="group">
+        <h2>{{ g.name }}</h2>
+        @for (e of g.entries; track e.key) {
+          <article class="card term" [id]="e.key">
+            <h3>{{ e.term }}</h3>
+            <p>{{ e.what }}</p>
+            @if (e.analogy) {
+              <p class="analogy"><span class="tag">In everyday terms</span>{{ e.analogy }}</p>
+            }
+            <p><span class="tag">Why it matters</span>{{ e.why }}</p>
+            @if (e.good) {
+              <p><span class="tag">What good looks like</span>{{ e.good }}</p>
+            }
+            @if (e.impact) {
+              <p class="impact"><span class="tag">Effect on the health score</span>{{ e.impact }}</p>
+            }
+            @if (e.watchOut) {
+              <p class="watch"><span class="tag">Watch out</span>{{ e.watchOut }}</p>
+            }
+            <p class="related">
+              @if (slideLink(e.key); as q) {
+                <a [routerLink]="[]" [queryParams]="q" class="see-slide">See it illustrated →</a>
+              }
+              @if (e.related?.length) {
+                <span class="tag">Related</span>
+                @for (r of e.related; track r) {
+                  @if (glossary[r]) {
+                    <a [routerLink]="[]" [queryParams]="{ view: 'terms' }" [fragment]="r">{{ glossary[r].term }}</a>
+                  }
+                }
+              }
+            </p>
+          </article>
+        }
+      </section>
+    } @empty {
+      <p class="muted">No terms match “{{ query() }}”.</p>
+    }
+  } @else if (current(); as c) {
+    @let s = slide()!;
+    @let e = entry();
+    <section class="deck" aria-roledescription="carousel" [attr.aria-label]="c.lesson.title">
+      <div class="deck-head">
+        <a [routerLink]="[]" [queryParams]="{}" class="crumb">← All lessons</a>
+        <h2 class="deck-title">{{ c.lesson.title }}</h2>
+        <span class="count" aria-live="polite">Slide {{ c.index + 1 }} of {{ c.lesson.slides.length }}</span>
+      </div>
+      <div class="deck-progress" aria-hidden="true">
+        <span [style.width.%]="((c.index + 1) / c.lesson.slides.length) * 100"></span>
+      </div>
+
+      <article class="card slide" [id]="s.id" aria-roledescription="slide"
+               [attr.aria-label]="(c.index + 1) + ' of ' + c.lesson.slides.length + ': ' + s.title"
+               (touchstart)="onTouchStart($event)" (touchend)="onTouchEnd($event)">
+        <div class="slide-text">
+          <h3 #slideHeading tabindex="-1">{{ s.title }}</h3>
+          @if (e) {
+            <p class="lead">{{ e.what }}</p>
+            @if (e.analogy) {
+              <p class="analogy"><span class="tag">In everyday terms</span>{{ e.analogy }}</p>
+            }
+            <p><span class="tag">Why it matters</span>{{ e.why }}</p>
+            @if (e.good) {
+              <p class="good"><span class="tag">What good looks like</span>{{ e.good }}</p>
+            }
+            @if (e.watchOut) {
+              <p class="watch"><span class="tag">Watch out</span>{{ e.watchOut }}</p>
+            }
+            @if (e.impact) {
+              <details class="impact">
+                <summary>Effect on the health score</summary>
+                <p>{{ e.impact }}</p>
+              </details>
+            }
+          } @else if (s.numbered) {
+            <ol class="points">
+              @for (p of s.points; track p) { <li>{{ p }}</li> }
+            </ol>
+          } @else {
+            @for (p of s.points; track p) { <p>{{ p }}</p> }
+          }
+          @if (s.takeaway) {
+            <p class="takeaway"><span class="tag">Remember</span>{{ s.takeaway }}</p>
+          }
+          @if (e?.related?.length) {
+            <p class="related">
+              <span class="tag">Related</span>
+              @for (r of e!.related; track r) {
+                @if (glossary[r] && slideLink(r); as q) {
+                  <a [routerLink]="[]" [queryParams]="q">{{ glossary[r].term }}</a>
+                }
+              }
+            </p>
+          }
+        </div>
+        @if (s.visual) {
+          <figure class="slide-visual">
+            <app-learn-visual [kind]="s.visual" [highlight]="s.highlight" />
+            @if (captionFor(s); as cap) { <figcaption>{{ cap }}</figcaption> }
+          </figure>
+        }
+      </article>
+
+      <div class="deck-nav">
+        <button type="button" class="nav-btn" (click)="prev()" [disabled]="isFirst()">← Previous</button>
+        <div class="dots" role="group" aria-label="Slides in this lesson">
+          @for (d of c.lesson.slides; track d.id; let i = $index) {
+            <button type="button" class="dot" [class.on]="i === c.index" [class.seen]="seen().has(d.id)"
+                    [attr.aria-label]="'Slide ' + (i + 1) + ': ' + d.title" [attr.aria-current]="i === c.index ? 'step' : null"
+                    (click)="go(i)"></button>
+          }
+        </div>
+        @if (!isLast()) {
+          <button type="button" class="nav-btn primary" (click)="next()">Next →</button>
+        } @else if (nextLesson(); as n) {
+          <a class="nav-btn primary" [routerLink]="[]" [queryParams]="{ lesson: n.id, slide: 1 }">Next lesson: {{ n.title }} →</a>
+        } @else {
+          <a class="nav-btn primary" [routerLink]="[]" [queryParams]="{}">All lessons ✓</a>
+        }
+      </div>
+      <p class="hint">Use the ← → keys or swipe to move between slides.</p>
+    </section>
+  } @else {
+    <section class="card intro">
+      <div>
+        <h2>New to investing? Start with lesson 1.</h2>
+        <p class="muted">
+          {{ lessons.length }} short lessons, {{ totalSlides }} slides, a few minutes each.
+          @if (totalSeen() > 0) { You’ve seen {{ totalSeen() }} of {{ totalSlides }} slides. }
+        </p>
+      </div>
+      <a class="nav-btn primary" [routerLink]="[]" [queryParams]="{ lesson: lessonCards()[0].lesson.id, slide: lessonCards()[0].resume }">
+        {{ lessonCards()[0].action }} “{{ lessonCards()[0].lesson.title }}”
+      </a>
+    </section>
+
+    <ol class="lesson-grid" aria-label="Lessons">
+      @for (lc of lessonCards(); track lc.lesson.id) {
+        <li class="card lesson-card">
+          @if (lc.visual) {
+            <div class="thumb" aria-hidden="true"><app-learn-visual [kind]="lc.visual" /></div>
+          }
+          <p class="lesson-no">Lesson {{ lc.number }} · {{ lc.total }} slides</p>
+          <h2>{{ lc.lesson.title }}</h2>
+          <p class="muted blurb">{{ lc.lesson.blurb }}</p>
+          <div class="lesson-foot">
+            <span class="seen-bar" role="img" [attr.aria-label]="lc.done + ' of ' + lc.total + ' slides seen'">
+              <span [style.width.%]="(lc.done / lc.total) * 100"></span>
+            </span>
+            <a class="lesson-link" [routerLink]="[]" [queryParams]="{ lesson: lc.lesson.id, slide: lc.resume }"
+               [attr.aria-label]="lc.action + ' lesson ' + lc.number + ': ' + lc.lesson.title">{{ lc.action }} →</a>
+          </div>
+        </li>
+      }
+    </ol>
+  }
+
+  <p class="disclaimer">
+    Educational content only, not investment advice. Rule-of-thumb ranges vary by industry and country, and example numbers are made up.
+  </p>
+</div>

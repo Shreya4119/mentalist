@@ -17,6 +17,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/.angular/
 
+# Uploaded report files (app.storage.dir)
+backend/data/
+
 # Env / secrets
 .env
 *.pem
@@ -24,3 +27,9 @@ frontend/.angular/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local tool settings
+.claude/
+
+# Logs
+*.log

@@ -1,0 +1,582 @@
+<svg class="lv" viewBox="0 0 360 220" role="img" [attr.aria-label]="label()" [attr.data-visual]="kind()">
+  @switch (kind()) {
+    @case ('flow-analysis') {
+      @for (b of [
+        { x: 6, t: 'The business', s1: 'sells, spends,', s2: 'owns, owes' },
+        { x: 94, t: 'Its reports', s1: 'income, balance', s2: 'sheet, cash flow' },
+        { x: 182, t: 'Ratios', s1: 'margins, debt,', s2: 'cash, growth' },
+        { x: 270, t: 'Your view', s1: 'healthy? risky?', s2: 'worth a look?' }
+      ]; track b.x; let last = $last) {
+        <rect [attr.x]="b.x" y="55" width="84" height="92" rx="12" [class]="last ? 'f-soft s-main' : 'f-alt s-line'" />
+        <text [attr.x]="b.x + 42" y="88" class="t sm b mid">{{ b.t }}</text>
+        <text [attr.x]="b.x + 42" y="110" class="t xs mid muted">{{ b.s1 }}</text>
+        <text [attr.x]="b.x + 42" y="124" class="t xs mid muted">{{ b.s2 }}</text>
+        @if (!last) {
+          <path [attr.d]="'M' + (b.x + 86) + ',101 h4'" class="s-text" />
+          <path [attr.d]="'M' + (b.x + 87) + ',97 l4,4 l-4,4'" class="s-text no-fill" />
+        }
+      }
+      <text x="180" y="185" class="t sm mid muted">Mentalist does the middle two steps; the last one is yours.</text>
+    }
+
+    @case ('three-statements') {
+      @for (c of [
+        { x: 6, t: 'Income statement', s: 'a year, like a film' },
+        { x: 124, t: 'Balance sheet', s: 'one day, like a photo' },
+        { x: 242, t: 'Cash flow', s: 'money in and out' }
+      ]; track c.x) {
+        <rect [attr.x]="c.x" y="14" width="112" height="192" rx="12" class="f-alt s-line" />
+        <text [attr.x]="c.x + 56" y="38" class="t sm b mid">{{ c.t }}</text>
+        <text [attr.x]="c.x + 56" y="54" class="t xs mid muted">{{ c.s }}</text>
+      }
+      <!-- income: sales shrinking to profit -->
+      <rect x="22" y="100" width="22" height="80" rx="3" class="f-main" />
+      <rect x="51" y="150" width="22" height="30" rx="3" class="f-main" />
+      <rect x="80" y="165" width="22" height="15" rx="3" class="f-main" />
+      <text x="33" y="195" class="t xs mid muted">Sales</text>
+      <text x="62" y="195" class="t xs mid muted">Op.</text>
+      <text x="91" y="195" class="t xs mid muted">Net</text>
+      <!-- balance: owns = owes + owners -->
+      <rect x="140" y="90" width="36" height="90" rx="3" class="f-alt2 s-line" />
+      <rect x="190" y="90" width="36" height="52" rx="3" class="f-warn-bg s-line" />
+      <rect x="190" y="144" width="36" height="36" rx="3" class="f-good-bg s-line" />
+      <text x="158" y="195" class="t xs mid muted">Owns</text>
+      <text x="208" y="195" class="t xs mid muted">Funded by</text>
+      <!-- cash flow -->
+      <text x="258" y="100" class="t sm">In</text>
+      <rect x="280" y="90" width="60" height="14" rx="3" class="f-good" />
+      <text x="258" y="130" class="t sm">Out</text>
+      <rect x="280" y="120" width="48" height="14" rx="3" class="f-warn" />
+      <line x1="258" y1="148" x2="342" y2="148" class="s-line" />
+      <text x="258" y="170" class="t sm b">Left over</text>
+      <rect x="318" y="160" width="12" height="14" rx="3" class="f-main" />
+    }
+
+    @case ('balance-blocks') {
+      <text x="95" y="20" class="t b mid">What it owns · 200</text>
+      <text x="265" y="20" class="t b mid">Who paid for it · 200</text>
+      <g [class.dim]="dim('assets')" [class.hl]="on('assets')">
+        <rect x="40" y="30" width="110" height="72" rx="6" class="f-alt2 s-line" />
+        <text x="95" y="62" class="t sm mid">Current assets</text><text x="95" y="77" class="t sm mid b">90</text>
+        <rect x="40" y="104" width="110" height="88" rx="6" class="f-alt2 s-line" />
+        <text x="95" y="144" class="t sm mid">Long-term assets</text><text x="95" y="159" class="t sm mid b">110</text>
+      </g>
+      <text x="180" y="118" class="t xl mid b">=</text>
+      <g [class.dim]="dim('liabilities')" [class.hl]="on('liabilities')">
+        <rect x="210" y="30" width="110" height="48" rx="6" class="f-warn-bg s-line" />
+        <text x="265" y="51" class="t sm mid">Current liabilities</text><text x="265" y="66" class="t sm mid b">60</text>
+        <rect x="210" y="80" width="110" height="48" rx="6" class="f-warn-bg s-line" />
+        <text x="265" y="101" class="t sm mid">Long-term liabilities</text><text x="265" y="116" class="t sm mid b">60</text>
+      </g>
+      <g [class.dim]="dim('equity')" [class.hl]="on('equity')">
+        <rect x="210" y="130" width="110" height="62" rx="6" class="f-good-bg s-line" />
+        <text x="265" y="157" class="t sm mid">Equity (owners)</text><text x="265" y="172" class="t sm mid b">80</text>
+      </g>
+    }
+
+    @case ('four-steps') {
+      <line x1="45" y1="90" x2="315" y2="90" class="s-line thick" />
+      @for (s of [
+        { x: 45, a: 'Health', b: 'score' }, { x: 135, a: 'Summary &', b: 'red flags' },
+        { x: 225, a: 'Key', b: 'ratios' }, { x: 315, a: 'Ask', b: 'questions' }
+      ]; track s.x; let i = $index) {
+        <circle [attr.cx]="s.x" cy="90" r="24" class="f-soft s-main" />
+        <text [attr.x]="s.x" y="96" class="t lg mid b">{{ i + 1 }}</text>
+        <text [attr.x]="s.x" y="140" class="t sm mid b">{{ s.a }}</text>
+        <text [attr.x]="s.x" y="155" class="t sm mid">{{ s.b }}</text>
+      }
+    }
+
+    @case ('price-vs-value') {
+      <line x1="30" y1="180" x2="300" y2="180" class="s-line" />
+      <text x="30" y="198" class="t xs muted">Years →</text>
+      <path [attr.d]="g.price" class="ln s-muted dashed" />
+      <path [attr.d]="g.bizValue" class="ln s-main" />
+      <text x="304" [attr.y]="g.bizValueEndY + 4" class="t xs">Business</text>
+      <text x="304" [attr.y]="g.priceEndY + 4" class="t xs muted">Price</text>
+      <line x1="40" y1="16" x2="56" y2="16" class="ln s-main" /><text x="60" y="20" class="t xs">Business value (earnings)</text>
+      <line x1="190" y1="16" x2="206" y2="16" class="ln s-muted dashed" /><text x="210" y="20" class="t xs">Share price</text>
+    }
+    @case ('score-gauge') {
+      @for (b of [
+        { from: 0, to: 35, n: 'Weak', c: 'f-bad' }, { from: 35, to: 55, n: 'Watch', c: 'f-warn' },
+        { from: 55, to: 75, n: 'Stable', c: 'f-good soft' }, { from: 75, to: 100, n: 'Strong', c: 'f-good' }
+      ]; track b.n) {
+        <rect [attr.x]="20 + b.from * 3.2 + 1" y="96" [attr.width]="(b.to - b.from) * 3.2 - 2" height="22" rx="4" [class]="b.c" />
+        <text [attr.x]="20 + (b.from + b.to) * 1.6" y="136" class="t sm mid b">{{ b.n }}</text>
+        <text [attr.x]="20 + b.from * 3.2" y="154" class="t xs mid muted">{{ b.from }}</text>
+      }
+      <text x="340" y="154" class="t xs mid muted">100</text>
+      <text x="237.6" y="62" class="t sm mid b">Example: 68</text>
+      <path d="M230.6,78 h14 l-7,12 z" class="f-text" />
+      <text x="180" y="192" class="t sm mid muted">Fewer than 4 ratios gives no score rather than a misleading one.</text>
+    }
+
+    @case ('area-weights') {
+      @for (a of areas; track a.key) {
+        <g [class.dim]="dim(a.key)" [class.hl]="on(a.key)">
+          <text x="132" [attr.y]="a.y + 13" class="t sm end">{{ a.label }}</text>
+          <rect x="140" [attr.y]="a.y" [attr.width]="a.weight * 7.2" height="18" rx="4" class="f-main" />
+          <text [attr.x]="146 + a.weight * 7.2" [attr.y]="a.y + 13" class="t sm b">{{ a.weight }}%</text>
+        </g>
+      }
+      <text x="180" y="208" class="t xs mid muted">Share of the overall health score</text>
+    }
+
+    @case ('traffic-light') {
+      <text x="180" y="24" class="t sm mid muted">Points each ratio result adds to its area’s score</text>
+      @for (r of [
+        { y: 50, n: 'Healthy', icon: '✓', c: 'good', p: 100 },
+        { y: 105, n: 'Caution', icon: '!', c: 'warn', p: 60 },
+        { y: 160, n: 'Concern', icon: '✕', c: 'bad', p: 20 }
+      ]; track r.n) {
+        <circle cx="30" [attr.cy]="r.y" r="14" [class]="'f-' + r.c" />
+        <text x="30" [attr.y]="r.y + 5" class="t b mid on-solid">{{ r.icon }}</text>
+        <text x="52" [attr.y]="r.y + 5" class="t b">{{ r.n }}</text>
+        <rect x="120" [attr.y]="r.y - 9" [attr.width]="r.p * 1.7" height="18" rx="4" [class]="'f-' + r.c" />
+        <text [attr.x]="126 + r.p * 1.7" [attr.y]="r.y + 5" class="t sm">{{ r.p }} points</text>
+      }
+    }
+    @case ('margin-waterfall') {
+      @for (c of [
+        { k: 'revenue', n1: 'Sales', n2: '', y: 30, h: 150, v: '100', c: 'f-main' },
+        { k: 'costs', n1: 'Running', n2: 'costs', y: 30, h: 127.5, v: '−85', c: 'f-neutral' },
+        { k: 'operating', n1: 'Operating', n2: 'income', y: 157.5, h: 22.5, v: '15', c: 'f-main' },
+        { k: 'interest', n1: 'Interest', n2: '', y: 157.5, h: 4.5, v: '−3', c: 'f-neutral' },
+        { k: 'tax', n1: 'Tax', n2: '', y: 162, h: 3, v: '−2', c: 'f-neutral' },
+        { k: 'net', n1: 'Net', n2: 'income', y: 165, h: 15, v: '10', c: 'f-main' }
+      ]; track c.k; let i = $index; let last = $last) {
+        <g [class.dim]="dim(c.k)" [class.hl]="on(c.k)">
+          <rect [attr.x]="22 + i * 56" [attr.y]="c.y" width="36" [attr.height]="c.h" rx="3" [class]="c.c" />
+          <text [attr.x]="40 + i * 56" [attr.y]="c.y - 6" class="t sm mid b">{{ c.v }}</text>
+          <text [attr.x]="40 + i * 56" y="196" class="t xs mid">{{ c.n1 }}</text>
+          <text [attr.x]="40 + i * 56" y="208" class="t xs mid">{{ c.n2 }}</text>
+        </g>
+        @if (!last) {
+          <line [attr.x1]="58 + i * 56" [attr.x2]="78 + i * 56"
+                [attr.y1]="i === 0 ? 30 : i === 1 || i === 2 ? 157.5 : i === 3 ? 162 : 165"
+                [attr.y2]="i === 0 ? 30 : i === 1 || i === 2 ? 157.5 : i === 3 ? 162 : 165" class="s-muted dotted" />
+        }
+      }
+      <line x1="16" y1="180" x2="344" y2="180" class="s-line" />
+    }
+
+    @case ('roe-roa') {
+      <g [class.dim]="dim('roa')" [class.hl]="on('roa')">
+        <rect x="30" y="35" width="90" height="150" rx="6" class="f-alt2 s-line" />
+        <text x="75" y="105" class="t sm mid">Assets</text><text x="75" y="120" class="t sm mid b">200</text>
+      </g>
+      <text x="75" y="203" class="t xs mid muted">What it owns</text>
+      <g [class.dim]="true">
+        <rect x="145" y="35" width="90" height="88" rx="6" class="f-warn-bg s-line" />
+        <text x="190" y="75" class="t sm mid">Liabilities</text><text x="190" y="90" class="t sm mid b">120</text>
+      </g>
+      <g [class.dim]="dim('roe')" [class.hl]="on('roe')">
+        <rect x="145" y="125" width="90" height="60" rx="6" class="f-good-bg s-line" />
+        <text x="190" y="150" class="t sm mid">Equity</text><text x="190" y="165" class="t sm mid b">80</text>
+      </g>
+      <text x="190" y="203" class="t xs mid muted">Who paid for it</text>
+      <g class="hl">
+        <rect x="265" y="177" width="60" height="8" rx="2" class="f-main" />
+        <text x="295" y="168" class="t sm mid b">Profit 10</text>
+      </g>
+      <text x="295" y="203" class="t xs mid muted">This year</text>
+      <text x="295" y="60" class="t sm mid" [class.b]="on('roa')">ROA 5%</text>
+      <text x="295" y="80" class="t sm mid" [class.b]="on('roe')">ROE 12.5%</text>
+    }
+
+    @case ('liquidity') {
+      <text x="72" y="72" class="t sm end">Owns now</text>
+      <text x="72" y="152" class="t sm end">Due ≤ 1 year</text>
+      <g [class.dim]="dim('currentRatio', 'quickRatio', 'cashRatio', 'currentAssets', 'cash')" [class.hl]="on('cash')">
+        <rect x="80" y="50" width="64" height="36" rx="4" class="f-good-bg s-line" />
+        <text x="112" y="66" class="t xs mid">Cash</text><text x="112" y="79" class="t xs mid b">30</text>
+      </g>
+      <g [class.dim]="dim('currentRatio', 'quickRatio', 'currentAssets', 'receivables')" [class.hl]="on('receivables')">
+        <rect x="146" y="50" width="86" height="36" rx="4" class="f-soft s-line" />
+        <text x="189" y="66" class="t xs mid">Receivables</text><text x="189" y="79" class="t xs mid b">40</text>
+      </g>
+      <g [class.dim]="dim('currentRatio', 'currentAssets', 'inventory')" [class.hl]="on('inventory')">
+        <rect x="234" y="50" width="108" height="36" rx="4" class="f-alt2 s-line" />
+        <text x="288" y="66" class="t xs mid">Stock (inventory)</text><text x="288" y="79" class="t xs mid b">50</text>
+      </g>
+      <g [class.dim]="dim('currentRatio', 'quickRatio', 'cashRatio', 'bills')" [class.hl]="on('bills')">
+        <rect x="80" y="130" width="176" height="36" rx="4" class="f-bad-bg s-line" />
+        <text x="168" y="146" class="t xs mid">Bills due within a year</text><text x="168" y="159" class="t xs mid b">80</text>
+      </g>
+      <line x1="256" y1="40" x2="256" y2="176" class="s-muted dashed" />
+      <text x="256" y="194" class="t xs mid muted">bills line</text>
+    }
+
+    @case ('debt-equity') {
+      <text x="85" y="18" class="t sm mid b">Funding of 200</text>
+      <g [class.dim]="dim('debtToEquity', 'debtRatio', 'debt')" [class.hl]="on('debt')">
+        <rect x="40" y="26" width="90" height="38" rx="5" class="f-bad-bg s-line" />
+        <text x="85" y="42" class="t xs mid">Borrowings</text><text x="85" y="56" class="t xs mid b">48</text>
+      </g>
+      <g [class.dim]="dim('debtRatio')">
+        <rect x="40" y="66" width="90" height="42" rx="5" class="f-warn-bg s-line" />
+        <text x="85" y="84" class="t xs mid">Other liabilities</text><text x="85" y="98" class="t xs mid b">52</text>
+      </g>
+      <g [class.dim]="dim('debtToEquity')">
+        <rect x="40" y="110" width="90" height="80" rx="5" class="f-good-bg s-line" />
+        <text x="85" y="146" class="t xs mid">Equity</text><text x="85" y="160" class="t xs mid b">100</text>
+      </g>
+      <g [class.dim]="dim('debtToEquity')" [class.hl]="on('debtToEquity')">
+        <rect x="160" y="30" width="186" height="70" rx="10" class="f-alt s-line" />
+        <text x="174" y="52" class="t sm b">Debt-to-equity</text>
+        <text x="174" y="72" class="t sm">48 ÷ 100 = 0.48×</text>
+        <text x="174" y="89" class="t xs muted">Healthy: 0.5× or below</text>
+      </g>
+      <g [class.dim]="dim('debtRatio')" [class.hl]="on('debtRatio')">
+        <rect x="160" y="112" width="186" height="70" rx="10" class="f-alt s-line" />
+        <text x="174" y="134" class="t sm b">Liabilities to assets</text>
+        <text x="174" y="154" class="t sm">(48 + 52) ÷ 200 = 50%</text>
+        <text x="174" y="171" class="t xs muted">Healthy: 50% or below</text>
+      </g>
+    }
+
+    @case ('coverage') {
+      <text x="180" y="44" class="t sm mid b">Operating income 50</text>
+      @for (i of range(5); track i) {
+        <rect [attr.x]="30 + i * 60 + 1" y="82" width="58" height="40" rx="4" [class]="i === 0 ? 'f-warn' : 'f-good'" />
+        <text [attr.x]="60 + i * 60" y="74" class="t sm mid">{{ i + 1 }}×</text>
+      }
+      <text x="60" y="142" class="t xs mid">Interest 10</text>
+      <text x="180" y="180" class="t sm mid">Profit could pay the interest bill 5 times over.</text>
+    }
+
+    @case ('profit-vs-cash') {
+      <g [class.dim]="dim('profit')">
+        <rect x="80" y="60" width="64" height="120" rx="4" class="f-neutral" />
+        <text x="112" y="52" class="t sm mid b">10</text>
+        <text x="112" y="196" class="t xs mid">Net income</text>
+        <text x="112" y="208" class="t xs mid muted">(reported profit)</text>
+      </g>
+      <g [class.dim]="dim('cash')" [class.hl]="on('cash')">
+        <rect x="216" y="36" width="64" height="144" rx="4" class="f-main" />
+        <text x="248" y="28" class="t sm mid b">12</text>
+        <text x="248" y="196" class="t xs mid">Operating cash flow</text>
+        <text x="248" y="208" class="t xs mid muted">(cash actually in)</text>
+      </g>
+      <line x1="60" y1="180" x2="300" y2="180" class="s-line" />
+      <text x="180" y="110" class="t lg mid b">1.2×</text>
+    }
+
+    @case ('fcf') {
+      <g [class.dim]="dim('ocf')">
+        <rect x="50" y="41" width="64" height="144" rx="4" class="f-main" />
+        <text x="82" y="33" class="t sm mid b">12</text>
+        <text x="82" y="200" class="t xs mid">Operating cash flow</text>
+      </g>
+      <g [class.dim]="dim('capex')" [class.hl]="on('capex')">
+        <rect x="148" y="41" width="64" height="60" rx="4" class="f-neutral" />
+        <text x="180" y="33" class="t sm mid b">−5</text>
+        <text x="180" y="200" class="t xs mid">Capex (investment)</text>
+      </g>
+      <g [class.dim]="dim('fcf')">
+        <rect x="246" y="101" width="64" height="84" rx="4" class="f-good" />
+        <text x="278" y="93" class="t sm mid b">7</text>
+        <text x="278" y="200" class="t xs mid">Free cash flow</text>
+      </g>
+      <line x1="114" y1="41" x2="148" y2="41" class="s-muted dotted" />
+      <line x1="212" y1="101" x2="246" y2="101" class="s-muted dotted" />
+      <line x1="36" y1="185" x2="324" y2="185" class="s-line" />
+    }
+
+    @case ('turnover') {
+      <text x="20" y="66" class="t sm">Assets</text>
+      <rect x="90" y="50" width="140" height="26" rx="4" class="f-alt2 s-line" />
+      <text x="238" y="68" class="t sm b">200</text>
+      <text x="20" y="126" class="t sm">Sales</text>
+      <rect x="90" y="110" width="210" height="26" rx="4" class="f-main" />
+      <text x="308" y="128" class="t sm b">300</text>
+      <text x="180" y="196" class="t sm mid">Each €1 of assets produced €1.50 of sales.</text>
+    }
+
+    @case ('growth-bars') {
+      <rect x="20" y="10" width="12" height="10" rx="2" class="f-neutral" /><text x="36" y="19" class="t xs">Last year = 100</text>
+      <rect x="140" y="10" width="12" height="10" rx="2" class="f-main" /><text x="156" y="19" class="t xs">This year</text>
+      @for (gp of [
+        { k: 'revenue', n: 'Sales', v: 110, x: 70 }, { k: 'profit', n: 'Net income', v: 125, x: 180 }, { k: 'equity', n: 'Equity', v: 110, x: 290 }
+      ]; track gp.k) {
+        <g [class.dim]="dim(gp.k)" [class.hl]="on(gp.k)">
+          <rect [attr.x]="gp.x - 37" y="80" width="34" height="100" rx="4" class="f-neutral" />
+          <rect [attr.x]="gp.x + 3" [attr.y]="180 - gp.v" width="34" [attr.height]="gp.v" rx="4" class="f-main" />
+          <text [attr.x]="gp.x - 20" y="74" class="t xs mid muted">100</text>
+          <text [attr.x]="gp.x + 20" [attr.y]="174 - gp.v" class="t xs mid">{{ gp.v }}</text>
+          <text [attr.x]="gp.x" y="38" class="t sm mid b">+{{ gp.v - 100 }}%</text>
+          <text [attr.x]="gp.x" y="198" class="t xs mid">{{ gp.n }}</text>
+        </g>
+      }
+      <line x1="20" y1="180" x2="340" y2="180" class="s-line" />
+    }
+
+    @case ('doubling') {
+      @for (v of [100, 200, 400]; track v) {
+        <line x1="40" [attr.y1]="185 - v * (160 / 450)" x2="300" [attr.y2]="185 - v * (160 / 450)" class="s-grid" />
+        <text x="34" [attr.y]="189 - v * (160 / 450)" class="t xs end muted">{{ v }}</text>
+      }
+      <line x1="40" y1="185" x2="300" y2="185" class="s-line" />
+      <path [attr.d]="g.g5" class="ln s-muted" />
+      <path [attr.d]="g.g10" class="ln s-main" />
+      <text x="304" [attr.y]="185 - g.g10End * (160 / 450) + 4" class="t xs b">10% · {{ g.g10End.toFixed(0) }}</text>
+      <text x="304" [attr.y]="185 - g.g5End * (160 / 450) + 4" class="t xs">5% · {{ g.g5End.toFixed(0) }}</text>
+      <text x="40" y="204" class="t xs muted">Year 0</text>
+      <text x="300" y="204" class="t xs end muted">Year 15</text>
+    }
+    @case ('group-tree') {
+      <rect x="8" y="8" width="344" height="160" rx="14" class="no-fill s-main dashed" />
+      <rect x="125" y="24" width="110" height="38" rx="8" class="f-soft s-main thick" />
+      <text x="180" y="47" class="t sm mid b">Parent company</text>
+      @for (s of [{ x: 22, n: 'Subsidiary NL' }, { x: 130, n: 'Subsidiary DE' }, { x: 238, n: 'Subsidiary US' }]; track s.x) {
+        <path [attr.d]="'M180,62 V88 H' + (s.x + 50) + ' V112'" class="s-line no-fill" />
+        <rect [attr.x]="s.x" y="112" width="100" height="38" rx="8" class="f-alt s-line" />
+        <text [attr.x]="s.x + 50" y="135" class="t sm mid">{{ s.n }}</text>
+      }
+      <text x="180" y="190" class="t sm mid"><tspan class="b">Consolidated</tspan>: the whole group (dashed box) as one</text>
+      <text x="180" y="208" class="t sm mid"><tspan class="b">Standalone</tspan>: the parent company only</text>
+    }
+
+    @case ('units') {
+      @for (r of [
+        { a: '1 lakh', b: '100,000' }, { a: '1 crore', b: '10,000,000 = 10 million' },
+        { a: '1 million', b: '1,000,000' }, { a: '1 billion', b: '1,000 million' }
+      ]; track r.a; let i = $index) {
+        <rect x="16" [attr.y]="14 + i * 38" width="328" height="34" rx="8" [class]="i % 2 ? 'f-surface' : 'f-alt'" />
+        <text x="30" [attr.y]="36 + i * 38" class="t b">{{ r.a }}</text>
+        <text x="130" [attr.y]="36 + i * 38" class="t">= {{ r.b }}</text>
+      }
+      <text x="180" y="190" class="t sm mid">₹500 crore = ₹5 billion</text>
+      <text x="180" y="208" class="t sm mid">“€ in millions: 2,500” = €2.5 billion</text>
+    }
+
+    @case ('checklist') {
+      @for (col of [
+        { x: 8, t: 'Strengths', c: 'good', icon: '✓', items: ['Profit backed by cash', 'Low borrowing', 'Sales growing'] },
+        { x: 184, t: 'Red flags', c: 'warn', icon: '!', items: ['Margins shrinking', 'Auditor’s concerns', 'Big one-off gains'] }
+      ]; track col.t) {
+        <rect [attr.x]="col.x" y="14" width="168" height="186" rx="12" class="f-alt s-line" />
+        <circle [attr.cx]="col.x + 24" cy="42" r="11" [class]="'f-' + col.c" />
+        <text [attr.x]="col.x + 24" y="47" class="t sm mid b on-solid">{{ col.icon }}</text>
+        <text [attr.x]="col.x + 42" y="47" class="t b">{{ col.t }}</text>
+        @for (it of col.items; track it; let i = $index) {
+          <circle [attr.cx]="col.x + 24" [attr.cy]="88 + i * 36" r="4" [class]="'f-' + col.c" />
+          <text [attr.x]="col.x + 36" [attr.y]="92 + i * 36" class="t sm">{{ it }}</text>
+        }
+      }
+    }
+
+    @case ('auditor') {
+      @for (r of [
+        { t: 'Unmodified (clean)', d: 'Accounts give a true and fair view', c: 'good', icon: '✓' },
+        { t: 'Qualified', d: 'Fair, except for a specific issue', c: 'warn', icon: '!' },
+        { t: 'Adverse', d: 'The accounts are misleading', c: 'bad', icon: '✕' },
+        { t: 'Disclaimer', d: 'The auditor could not form an opinion', c: 'bad', icon: '?' }
+      ]; track r.t; let i = $index) {
+        <rect x="10" [attr.y]="10 + i * 50" width="340" height="44" rx="10" class="f-alt s-line" />
+        <circle cx="34" [attr.cy]="32 + i * 50" r="12" [class]="'f-' + r.c" />
+        <text x="34" [attr.y]="37 + i * 50" class="t sm mid b on-solid">{{ r.icon }}</text>
+        <text x="56" [attr.y]="28 + i * 50" class="t sm b">{{ r.t }}</text>
+        <text x="56" [attr.y]="44 + i * 50" class="t xs muted">{{ r.d }}</text>
+      }
+      <text x="350" y="216" class="t xs end muted">best → worst, top to bottom</text>
+    }
+
+    @case ('data-quality') {
+      @for (i of range(15); track i) {
+        <circle [attr.cx]="90 + (i % 5) * 45" [attr.cy]="40 + (i - (i % 5)) / 5 * 42" r="13"
+                [class]="i < 12 ? 'f-main' : 'no-fill s-muted dashed'" />
+      }
+      <text x="180" y="180" class="t sm mid b">12 of 15 key figures found</text>
+      <circle cx="98" cy="202" r="5" class="f-main" /><text x="108" y="206" class="t xs">found in the report</text>
+      <circle cx="218" cy="202" r="5" class="no-fill s-muted dashed" /><text x="228" y="206" class="t xs">not found</text>
+    }
+
+    @case ('axis-trick') {
+      @for (c of [{ x: 20, t: 'Axis starts at 95', a: 48.75, b: 113.75, z: '95' }, { x: 194, t: 'Axis starts at 0', a: 115.8, b: 120.6, z: '0' }]; track c.x) {
+        <text [attr.x]="c.x + 73" y="20" class="t sm mid b">{{ c.t }}</text>
+        <line [attr.x1]="c.x" y1="170" [attr.x2]="c.x + 146" y2="170" class="s-line" />
+        <line [attr.x1]="c.x" y1="40" [attr.x2]="c.x" y2="170" class="s-line" />
+        <text [attr.x]="c.x - 4" y="174" class="t xs end muted">{{ c.z }}</text>
+        <rect [attr.x]="c.x + 24" [attr.y]="170 - c.a" width="38" [attr.height]="c.a" rx="3" class="f-main" />
+        <rect [attr.x]="c.x + 84" [attr.y]="170 - c.b" width="38" [attr.height]="c.b" rx="3" class="f-main" />
+        <text [attr.x]="c.x + 43" [attr.y]="164 - c.a" class="t xs mid">98</text>
+        <text [attr.x]="c.x + 103" [attr.y]="164 - c.b" class="t xs mid">102</text>
+        <text [attr.x]="c.x + 43" y="186" class="t xs mid muted">Last year</text>
+        <text [attr.x]="c.x + 103" y="186" class="t xs mid muted">This year</text>
+      }
+      <text x="180" y="210" class="t xs mid muted">Always check where the axis starts</text>
+    }
+
+    @case ('outlook') {
+      <rect x="20" y="10" width="12" height="10" rx="2" class="f-neutral" /><text x="36" y="19" class="t xs">Promised growth</text>
+      <rect x="150" y="10" width="12" height="10" rx="2" class="f-main" /><text x="166" y="19" class="t xs">Delivered</text>
+      @for (y of [{ n: '2023', p: 8, d: 6, x: 70 }, { n: '2024', p: 8, d: 8, x: 180 }, { n: '2025', p: 10, d: 7, x: 290 }]; track y.n) {
+        <rect [attr.x]="y.x - 37" [attr.y]="180 - y.p * 13" width="34" [attr.height]="y.p * 13" rx="4" class="f-neutral" />
+        <rect [attr.x]="y.x + 3" [attr.y]="180 - y.d * 13" width="34" [attr.height]="y.d * 13" rx="4" class="f-main" />
+        <text [attr.x]="y.x - 20" [attr.y]="174 - y.p * 13" class="t xs mid">{{ y.p }}%</text>
+        <text [attr.x]="y.x + 20" [attr.y]="174 - y.d * 13" class="t xs mid b">{{ y.d }}%</text>
+        <text [attr.x]="y.x" y="198" class="t xs mid">{{ y.n }}</text>
+      }
+      <line x1="20" y1="180" x2="340" y2="180" class="s-line" />
+    }
+    @case ('emergency-fund') {
+      <text x="180" y="30" class="t sm mid b">€8,000 saved covers 4 months of €2,000 costs</text>
+      @for (m of range(8); track m) {
+        <text [attr.x]="40 + m * 40" y="62" class="t xs mid muted">{{ m + 1 }}</text>
+        <rect [attr.x]="22 + m * 40" y="70" width="36" height="50" rx="5" [class]="m < 4 ? 'f-main' : 'f-surface s-line'" />
+      }
+      <rect x="21" y="134" width="118" height="10" rx="3" class="f-bad" />
+      <rect x="141" y="134" width="118" height="10" rx="3" class="f-warn" />
+      <rect x="261" y="134" width="78" height="10" rx="3" class="f-good" />
+      <text x="80" y="162" class="t xs mid">Concern: under 3</text>
+      <text x="200" y="162" class="t xs mid">Caution: 3–6</text>
+      <text x="300" y="162" class="t xs mid">Healthy: 6+</text>
+      <text x="180" y="196" class="t xs mid muted">months of essential costs</text>
+    }
+
+    @case ('insurance') {
+      @for (r of [
+        { n: 'Liability', s: 'Covered', c: 'good', icon: '✓' }, { n: 'Health', s: 'Covered', c: 'good', icon: '✓' },
+        { n: 'Disability (income if you can’t work)', s: 'Gap', c: 'bad', icon: '✕' },
+        { n: 'Term life', s: 'Only if others depend on you', c: 'neutral', icon: '–' }
+      ]; track r.n; let i = $index) {
+        <rect x="10" [attr.y]="10 + i * 44" width="340" height="38" rx="10" class="f-alt s-line" />
+        <circle cx="32" [attr.cy]="29 + i * 44" r="11" [class]="'f-' + r.c" />
+        <text x="32" [attr.y]="34 + i * 44" class="t sm mid b on-solid">{{ r.icon }}</text>
+        <text x="52" [attr.y]="34 + i * 44" class="t sm">{{ r.n }}</text>
+        <text x="340" [attr.y]="34 + i * 44" class="t xs end muted">{{ r.s }}</text>
+      }
+      <text x="180" y="206" class="t sm mid b">One gap → Caution</text>
+    }
+
+    @case ('income-split') {
+      <text x="180" y="30" class="t sm mid b">Monthly income €3,000</text>
+      @for (s of [
+        { k: 'housing', n: 'Housing', p: 30, x: 0, c: 'f-soft', up: true },
+        { k: 'essentials', n: 'Food, transport…', p: 30, x: 30, c: 'f-alt2', up: false },
+        { k: 'debt', n: 'Debt', p: 8, x: 60, c: 'f-bad-bg', up: true },
+        { k: 'savings', n: 'Savings', p: 20, x: 68, c: 'f-good-bg', up: false },
+        { k: 'other', n: 'Other', p: 12, x: 88, c: 'f-warn-bg', up: true }
+      ]; track s.k) {
+        <g [class.dim]="dim(s.k)" [class.hl]="on(s.k)">
+          <rect [attr.x]="20 + s.x * 3.2 + 1" y="80" [attr.width]="s.p * 3.2 - 2" height="44" rx="4" [class]="s.c + ' s-line'" />
+          <text [attr.x]="20 + (s.x + s.p / 2) * 3.2" y="106" class="t xs mid b">{{ s.p }}%</text>
+          <text [attr.x]="20 + (s.x + s.p / 2) * 3.2" [attr.y]="s.up ? 70 : 142" class="t xs mid">{{ s.n }}</text>
+        </g>
+      }
+      @if (on('housing')) { <text x="180" y="180" class="t sm mid">Healthy: up to 30% · Concern: above 40%</text> }
+      @if (on('savings')) { <text x="180" y="180" class="t sm mid">Healthy: 20% or more · Concern: under 10%</text> }
+      @if (on('debt')) { <text x="180" y="180" class="t sm mid">Healthy: under 10% · Concern: above 20%</text> }
+    }
+
+    @case ('compounding') {
+      @for (v of [50000, 100000, 150000, 200000]; track v) {
+        <line x1="40" [attr.y1]="185 - v * (160 / 210000)" x2="300" [attr.y2]="185 - v * (160 / 210000)" class="s-grid" />
+        <text x="34" [attr.y]="189 - v * (160 / 210000)" class="t xs end muted">{{ v / 1000 }}k</text>
+      }
+      <path [attr.d]="g.valueArea" class="f-soft" />
+      <path [attr.d]="g.value" class="ln s-main" />
+      <path [attr.d]="g.paidIn" class="ln s-muted dashed" />
+      <line x1="40" y1="185" x2="300" y2="185" class="s-line" />
+      <line x1="48" y1="30" x2="64" y2="30" class="ln s-main" /><text x="70" y="34" class="t xs b">Value after 30 years: {{ euro(g.valueEnd) }}</text>
+      <line x1="48" y1="48" x2="64" y2="48" class="ln s-muted dashed" /><text x="70" y="52" class="t xs">You paid in: {{ euro(g.paidInEnd) }}</text>
+      <text x="40" y="204" class="t xs muted">Year 0</text>
+      <text x="300" y="204" class="t xs end muted">Year 30</text>
+    }
+
+    @case ('goals') {
+      @for (r of [
+        { n: 'Emergency fund', p: 100, ok: true, s: 'On track' },
+        { n: 'Home deposit', p: 78, ok: false, s: '78% by the date' },
+        { n: 'Car', p: 100, ok: true, s: 'On track' }
+      ]; track r.n; let i = $index) {
+        <text x="16" [attr.y]="40 + i * 52" class="t sm b">{{ r.n }}</text>
+        <text x="344" [attr.y]="40 + i * 52" class="t xs end muted">{{ r.s }}</text>
+        <rect x="16" [attr.y]="48 + i * 52" width="328" height="14" rx="7" class="f-alt2" />
+        <rect x="16" [attr.y]="48 + i * 52" [attr.width]="r.p * 3.28" height="14" rx="7" [class]="r.ok ? 'f-good' : 'f-warn'" />
+      }
+      <text x="180" y="200" class="t sm mid b">2 of 3 goals on track → Caution</text>
+    }
+
+    @case ('buckets') {
+      @for (b of [
+        { x: 30, n: 'Safe', h: 'up to 3 years', r: '2%', amp: 2, fill: 28 },
+        { x: 140, n: 'Balanced', h: '3–7 years', r: '4%', amp: 7, fill: 56 },
+        { x: 250, n: 'Growth', h: '7+ years', r: '6%', amp: 14, fill: 84 }
+      ]; track b.n) {
+        <path [attr.d]="'M' + b.x + ',' + 44 + ' l13,-' + b.amp + ' l13,' + (2 * b.amp) + ' l13,-' + (2 * b.amp) + ' l13,' + (2 * b.amp) + ' l14,-' + b.amp + ' l14,0'"
+              class="ln s-muted no-fill" />
+        <rect [attr.x]="b.x" y="64" width="80" height="100" rx="10" class="f-surface s-line" />
+        <rect [attr.x]="b.x + 1" [attr.y]="164 - b.fill" width="78" [attr.height]="b.fill - 1" rx="9" class="f-main" />
+        <text [attr.x]="b.x + 40" y="184" class="t sm mid b">{{ b.n }}</text>
+        <text [attr.x]="b.x + 40" y="199" class="t xs mid">{{ b.h }}</text>
+        <text [attr.x]="b.x + 40" [attr.y]="156 - b.fill" class="t sm mid b">{{ b.r }}</text>
+      }
+      <text x="8" y="16" class="t xs muted">Bigger swings on the way, higher assumed yearly return →</text>
+    }
+
+    @case ('inflation') {
+      <line x1="40" y1="155" x2="300" y2="155" class="s-muted dashed" />
+      <text x="34" y="159" class="t xs end muted">40k</text>
+      <path [attr.d]="g.target" class="ln s-main" />
+      <line [attr.x1]="g.targetDot[0]" [attr.y1]="g.targetDot[1]" [attr.x2]="g.targetDot[0]" y2="180" class="s-muted dotted" />
+      <circle [attr.cx]="g.targetDot[0]" [attr.cy]="g.targetDot[1]" r="5" class="f-main s-surface" />
+      <text [attr.x]="g.targetDot[0] - 6" [attr.y]="g.targetDot[1] - 12" class="t xs end b">Year 4: {{ euro(g.targetAt4) }}</text>
+      <text x="300" y="30" class="t xs end">Year 10: {{ euro(g.targetEnd) }}</text>
+      <text x="300" y="148" class="t xs end muted">Today’s price: €40,000</text>
+      <line x1="40" y1="180" x2="300" y2="180" class="s-line" />
+      <text x="40" y="198" class="t xs muted">Today</text>
+      <text x="300" y="198" class="t xs end muted">10 years</text>
+    }
+
+    @case ('fee-drag') {
+      @for (v of [20000, 40000, 60000]; track v) {
+        <line x1="40" [attr.y1]="185 - v * (160 / 60000)" x2="300" [attr.y2]="185 - v * (160 / 60000)" class="s-grid" />
+        <text x="34" [attr.y]="189 - v * (160 / 60000)" class="t xs end muted">{{ v / 1000 }}k</text>
+      }
+      <path [attr.d]="g.highFee" class="ln s-warn" />
+      <path [attr.d]="g.lowFee" class="ln s-main" />
+      <line x1="300" [attr.y1]="g.lowFeeY" x2="300" [attr.y2]="g.highFeeY" class="s-text thick" />
+      <text x="304" [attr.y]="g.lowFeeY + 4" class="t xs b">0.2%</text>
+      <text x="304" [attr.y]="g.highFeeY + 4" class="t xs">1.5%</text>
+      <text x="44" y="40" class="t xs">Fees 0.2%: {{ euro(g.lowFeeEnd) }}</text>
+      <text x="44" y="56" class="t xs">Fees 1.5%: {{ euro(g.highFeeEnd) }}</text>
+      <text x="44" y="74" class="t xs b">Lost to fees: {{ euro(g.lowFeeEnd - g.highFeeEnd) }}</text>
+      <line x1="40" y1="185" x2="300" y2="185" class="s-line" />
+      <text x="40" y="204" class="t xs muted">Year 0</text>
+      <text x="300" y="204" class="t xs end muted">Year 30</text>
+    }
+
+    @case ('concentration') {
+      @for (d of g.concentrated; track $index; let i = $index) {
+        <path [attr.d]="d" [class]="i === 0 ? 'f-warn' : 'f-neutral'" />
+      }
+      <text x="95" y="106" class="t lg mid b">60%</text>
+      @for (d of g.spread; track $index; let i = $index) {
+        <path [attr.d]="d" class="f-main" />
+      }
+      <text x="265" y="104" class="t sm mid b">1,000+</text>
+      <text x="265" y="118" class="t xs mid muted">companies</text>
+      <text x="95" y="188" class="t xs mid">One company = 60%</text>
+      <text x="95" y="202" class="t xs mid muted">one bad year hurts a lot</text>
+      <text x="265" y="188" class="t xs mid">Broad index fund</text>
+      <text x="265" y="202" class="t xs mid muted">no single company dominates</text>
+    }
+
+    @case ('ladder') {
+      <line x1="30" y1="22" x2="30" y2="198" class="s-line thick" />
+      @for (s of ['Starter buffer', 'Basic insurance', 'Pay off expensive debt', 'Employer pension contribution', 'Full emergency fund',
+                  'Income protection', 'Your goals', 'Retirement saving', 'Low-cost investing']; track s; let i = $index) {
+        <circle cx="30" [attr.cy]="22 + i * 22" r="9" [class]="i < 2 ? 'f-good' : i === 2 ? 'f-soft s-main thick' : 'f-surface s-line'" />
+        <text x="30" [attr.y]="26 + i * 22" class="t xs mid b" [class.on-solid]="i < 2">{{ i < 2 ? '✓' : i + 1 }}</text>
+        <text x="48" [attr.y]="26 + i * 22" class="t sm" [class.b]="i === 2" [class.muted]="i > 2">{{ s }}</text>
+        @if (i === 2) {
+          <rect x="250" [attr.y]="13 + i * 22" width="44" height="18" rx="9" class="f-main" />
+          <text x="272" [attr.y]="26 + i * 22" class="t xs mid b on-solid">Next</text>
+        }
+      }
+    }
+  }
+</svg>

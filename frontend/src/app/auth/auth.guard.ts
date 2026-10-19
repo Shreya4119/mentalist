@@ -9,11 +9,3 @@ export const authGuard: CanActivateFn = () => {
   }
   return inject(Router).createUrlTree(['/login']);
 };
-
-export const hrAdminGuard: CanActivateFn = () => {
-  const authService = inject(AuthService);
-  if (authService.isAuthenticated() && authService.isHrAdmin()) {
-    return true;
-  }
-  return inject(Router).createUrlTree(['/chat']);
-};

@@ -1,0 +1,110 @@
+<div class="reports-page">
+  <header class="page-header">
+    <h1>Financial reports</h1>
+    <p class="subtitle">
+      Upload a balance sheet or annual report. Mentalist reads it (tables, charts and scanned pages included),
+      computes standard ratios and a financial health score, and explains what they mean.
+    </p>
+    <p class="learn-cta">
+      New to investing? <a routerLink="/reports/learn" class="learn-link">Learn the basics</a> — every term explained with everyday examples.
+    </p>
+  </header>
+
+  <section class="upload-zone" [class.over]="dragOver()" [class.busy]="uploading()"
+           (dragover)="$event.preventDefault(); dragOver.set(true)" (dragleave)="dragOver.set(false)" (drop)="onDrop($event)">
+    @if (noProvider()) {
+      <p class="error" role="alert">No AI provider is configured. Add GEMINI_API_KEY or ANTHROPIC_API_KEY to backend/.env and restart the backend.</p>
+    }
+    <div class="upload-main">
+      <div>
+        <p class="upload-title">{{ uploading() ? progressText() : 'Drop a report here, or choose a file' }}</p>
+        <p class="upload-hint">PDF, images (PNG, JPG, WEBP, TIFF), XLSX/XLS/CSV, DOCX or TXT · up to {{ maxUploadMb }} MB · several page photos at once become one report</p>
+      </div>
+      <div class="upload-actions">
+        @if (configuredProviders().length > 1) {
+          <label class="provider-select">
+            Analyse with
+            <select [ngModel]="provider()" (ngModelChange)="provider.set($event)" aria-label="AI provider">
+              @for (p of configuredProviders(); track p.id) {
+                <option [value]="p.id">{{ p.label }}</option>
+              }
+            </select>
+          </label>
+        }
+        <label class="button-like" [class.disabled]="uploading() || noProvider()">
+          Choose file
+          <input #fileInput type="file" multiple [accept]="accept" (change)="onFileChosen($event)"
+                 [disabled]="uploading() || noProvider()" aria-label="Choose a financial report to upload" />
+        </label>
+      </div>
+    </div>
+    @if (progress() !== null) {
+      <div class="upload-progress" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100"
+           [attr.aria-valuenow]="progress()">
+        <span [style.width.%]="progress()"></span>
+      </div>
+    }
+    @if (uploadError()) {
+      <p class="error" role="alert">{{ uploadError() }}</p>
+    }
+    <p class="privacy-note">Use public reports. AI providers' free tiers may use uploaded content to improve their models.</p>
+  </section>
+
+  <section class="library">
+    <div class="library-head">
+      <h2>Reports</h2>
+      @if (items().length > 1) {
+        <button type="button" class="compare-button" [disabled]="!canCompare()" (click)="compare()">
+          {{ canCompare() ? 'Compare selected (2)' : 'Select 2 analysed reports to compare' }}
+        </button>
+      }
+    </div>
+
+    @if (loading()) {
+      <p class="muted">Loading reports…</p>
+    } @else if (loadError()) {
+      <p class="error" role="alert">{{ loadError() }} <button type="button" class="retry-button" (click)="load()">Retry</button></p>
+    } @else if (items().length === 0) {
+      <p class="empty-state">No reports yet. Upload a company's balance sheet or annual report to get its health check.</p>
+    } @else {
+      <ul class="report-list">
+        @for (r of items(); track r.id) {
+          <li class="report-row" [class.selected]="selected().includes(r.id)">
+            <a class="report-link" [routerLink]="['/reports', r.id]">
+              <span class="report-name">{{ r.companyName ?? r.filename }}</span>
+              <span class="report-meta">
+                @if (r.companyName) { {{ r.filename }} · }
+                @if (r.reportingPeriod) { {{ r.reportingPeriod }} · }
+                Uploaded {{ r.uploadedAt | date: 'mediumDate' }}
+              </span>
+            </a>
+            <span class="report-status" [class]="'report-status ' + (r.analysisStatus ?? 'none').toLowerCase()">
+              @if (isInFlight(r)) {
+                <span class="spinner" aria-hidden="true"></span>
+              }
+              @if (r.analysisStatus === 'COMPLETED' && r.healthScore !== null) {
+                <strong>{{ r.healthScore }}</strong>/100 ·
+              }
+              {{ statusText(r) }}
+            </span>
+            @if (r.chatReady) {
+              <a class="ask-link" [routerLink]="['/reports', r.id]" fragment="ask"
+                 [attr.aria-label]="'Ask questions about ' + (r.companyName ?? r.filename)">Ask</a>
+            } @else {
+              <span class="ask-link placeholder"></span>
+            }
+            @if (r.analysisStatus === 'COMPLETED') {
+              <label class="select-box">
+                <input type="checkbox" [checked]="selected().includes(r.id)" (click)="toggleSelect(r, $event)"
+                       [attr.aria-label]="'Select ' + (r.companyName ?? r.filename) + ' to compare'" />
+                Compare
+              </label>
+            } @else {
+              <span class="select-box placeholder"></span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

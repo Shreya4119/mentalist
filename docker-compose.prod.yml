@@ -57,6 +57,9 @@ services:
       REDIS_PORT: "6379"
       AWS_SQS_ENDPOINT: http://localstack:4566
       OLLAMA_BASE_URL: http://host.docker.internal:11434
+      STORAGE_DIR: /data/uploads
+    volumes:
+      - proddata_uploads:/data/uploads
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -71,6 +74,7 @@ services:
       - "8081:80"
 
 volumes:
+  proddata_uploads:
   proddata_pg:
   proddata_redis:
   proddata_localstack:

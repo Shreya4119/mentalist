@@ -1,0 +1,187 @@
+<div class="plan-page">
+  <a routerLink="/plan" class="back-link">← My plan</a>
+  <header>
+    <h1>{{ prefilled() ? 'Update your numbers' : m.individual ? 'Your personal health check' : 'Your family health check' }}</h1>
+    <p class="subtitle">
+      Monthly amounts {{ m.individual ? 'for you alone' : 'for your whole household' }}. Rough numbers are fine; leave a field
+      empty if you don't know it and that check will simply be skipped. Only you can see what you enter.
+    </p>
+  </header>
+
+  @if (errors().length) {
+    <div class="form-errors" id="form-errors" tabindex="-1" role="alert">
+      <strong>Please check the form:</strong>
+      <ul>
+        @for (e of errors(); track e) { <li>{{ e }}</li> }
+      </ul>
+    </div>
+  }
+
+  <form class="form" (ngSubmit)="submit()" novalidate>
+    <fieldset class="card">
+      <legend>Who is this check for?</legend>
+      <div class="segmented" role="radiogroup" aria-label="Who is this check for?">
+        <label [class.on]="m.individual">
+          <input type="radio" name="individual" [checked]="m.individual" (change)="setIndividual(true)" />
+          <span><strong>Just me</strong><span class="seg-hint">My own money only</span></span>
+        </label>
+        <label [class.on]="!m.individual">
+          <input type="radio" name="individual" [checked]="!m.individual" (change)="setIndividual(false)" />
+          <span><strong>My household</strong><span class="seg-hint">With a partner, children or others who rely on us</span></span>
+        </label>
+      </div>
+      <div class="field-grid">
+        <label class="field">Country you live in
+          <select name="country" [(ngModel)]="m.country" required>
+            <option [ngValue]="null" disabled>Choose…</option>
+            <option ngValue="DE">Germany</option>
+            <option ngValue="NL">Netherlands</option>
+          </select>
+          <span class="hint">Decides the insurance names, tax notes and local rules.</span>
+        </label>
+        @if (!m.individual) {
+          <div class="field" role="group" aria-labelledby="adults-label">
+            <span id="adults-label">Adults sharing finances</span>
+            <div class="radio-row">
+              <label><input type="radio" name="adults" [value]="1" [(ngModel)]="m.adults" /> One</label>
+              <label><input type="radio" name="adults" [value]="2" [(ngModel)]="m.adults" /> Two (couple)</label>
+            </div>
+          </div>
+          <label class="field">Dependants
+            <input type="number" name="dependants" min="0" max="20" [(ngModel)]="m.dependants" />
+            <span class="hint">Children or others who rely on your income.</span>
+          </label>
+        }
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Income and spending</legend>
+      <div class="field-grid">
+        <label class="field">Net monthly income (required)
+          <span class="money"><input type="number" name="net" min="0" [(ngModel)]="m.netMonthlyIncome" required /></span>
+          <span class="hint">{{ m.individual ? 'Your take-home pay after tax.' : 'Take-home pay after tax, all adults together.' }}</span>
+        </label>
+        <label class="field">Gross monthly income
+          <span class="money"><input type="number" name="gross" min="0" [(ngModel)]="m.grossMonthlyIncome" /></span>
+          <span class="hint">Before tax. Needed for the retirement check.</span>
+        </label>
+        <label class="field">Essential monthly spending (required)
+          <span class="money"><input type="number" name="essential" min="0" [(ngModel)]="m.essentialMonthlySpending" required /></span>
+          <span class="hint">What you can't cut: housing, food, insurance, transport, childcare.</span>
+        </label>
+        <label class="field">Total monthly spending
+          <span class="money"><input type="number" name="total" min="0" [(ngModel)]="m.totalMonthlySpending" /></span>
+          <span class="hint">Everything that leaves your account, except saving and investing.</span>
+        </label>
+        <label class="field">Rent or mortgage payment
+          <span class="money"><input type="number" name="housing" min="0" [(ngModel)]="m.monthlyHousingCost" /></span>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Savings and debts</legend>
+      <div class="field-grid">
+        <label class="field">Cash savings
+          <span class="money"><input type="number" name="cash" min="0" [(ngModel)]="m.cashSavings" /></span>
+          <span class="hint">Savings and current accounts you can reach within days. Not investments.</span>
+        </label>
+        <label class="field">Monthly loan and credit repayments
+          <span class="money"><input type="number" name="debtPayments" min="0" [(ngModel)]="m.monthlyDebtPayments" /></span>
+          <span class="hint">Car finance, personal loans, credit cards. Not your mortgage. 0 if none.</span>
+        </label>
+        <label class="field">Expensive debt outstanding
+          <span class="money"><input type="number" name="expensiveDebt" min="0" [(ngModel)]="m.expensiveDebtBalance" /></span>
+          <span class="hint">Credit-card balances, overdraft, consumer loans above about 7% interest.</span>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Retirement and investments</legend>
+      <div class="field-grid">
+        <label class="field">Monthly retirement saving
+          <span class="money"><input type="number" name="retirement" min="0" [(ngModel)]="m.monthlyRetirementSaving" /></span>
+          <span class="hint">Your workplace pension contribution plus your own retirement investing.</span>
+        </label>
+        <div class="field" role="group" aria-labelledby="match-label">
+          <span id="match-label">Does your employer add to your pension when you contribute?</span>
+          <div class="radio-row">
+            <label><input type="radio" name="match" [value]="true" [(ngModel)]="m.employerMatchAvailable" /> Yes</label>
+            <label><input type="radio" name="match" [value]="false" [(ngModel)]="m.employerMatchAvailable" /> No / don't know</label>
+          </div>
+        </div>
+        @if (m.employerMatchAvailable) {
+          <div class="field" role="group" aria-labelledby="matchused-label">
+            <span id="matchused-label">Are you contributing enough to get the full amount?</span>
+            <div class="radio-row">
+              <label><input type="radio" name="matchUsed" [value]="true" [(ngModel)]="m.employerMatchFullyUsed" /> Yes</label>
+              <label><input type="radio" name="matchUsed" [value]="false" [(ngModel)]="m.employerMatchFullyUsed" /> No</label>
+            </div>
+          </div>
+        }
+        <label class="field">Investments in total
+          <span class="money"><input type="number" name="investments" min="0" [(ngModel)]="m.investmentsTotal" /></span>
+          <span class="hint">Funds, ETFs and shares, outside your pension.</span>
+        </label>
+        <label class="field">Largest single company holding<app-info-tip term="concentration" />
+          <span class="money"><input type="number" name="largest" min="0" [(ngModel)]="m.largestHoldingValue" /></span>
+          <span class="hint">0 if you only hold broad funds. Employer shares count.</span>
+        </label>
+        <label class="field">Average yearly fund fee (%)<app-info-tip term="feeDrag" />
+          <input type="number" name="fee" min="0" max="5" step="0.01" [(ngModel)]="m.weightedFundFeePct" />
+          <span class="hint">The TER on your fund's fact sheet, e.g. 0.2.</span>
+        </label>
+      </div>
+    </fieldset>
+
+    @if (m.insurance; as ins) {
+      <fieldset class="card">
+        <legend>Insurance</legend>
+        <p class="muted small">Tick the covers you have.<app-info-tip term="insuranceCover" /></p>
+        <div class="checks">
+          @for (k of insuranceKeys; track k) {
+            <label class="check">
+              <input type="checkbox" [name]="'ins-' + k" [(ngModel)]="ins[k]" />
+              <span>{{ names()[k] }}@if (k === 'termLife') { <span class="muted"> (needed if anyone relies on your income)</span> }</span>
+            </label>
+          }
+        </div>
+      </fieldset>
+    }
+
+    <fieldset class="card">
+      <legend>Goals</legend>
+      <p class="muted small">Amounts in today's money; Mentalist adds inflation.<app-info-tip term="goalsOnTrack" /></p>
+      @for (g of m.goals; track $index; let i = $index) {
+        <div class="goal-edit" role="group" [attr.aria-label]="'Goal ' + (i + 1)">
+          <label class="field">Goal name
+            <input type="text" [name]="'goalName' + i" [(ngModel)]="g.name" maxlength="60" placeholder="e.g. Home deposit" />
+          </label>
+          <label class="field">Target amount
+            <span class="money"><input type="number" [name]="'goalTarget' + i" min="0" [(ngModel)]="g.targetAmount" /></span>
+          </label>
+          <label class="field">By year
+            <input type="number" [name]="'goalYear' + i" [min]="currentYear" [(ngModel)]="g.targetYear" />
+          </label>
+          <label class="field">Saved so far
+            <span class="money"><input type="number" [name]="'goalSaved' + i" min="0" [(ngModel)]="g.currentSaved" /></span>
+          </label>
+          <label class="field">Saving a month
+            <span class="money"><input type="number" [name]="'goalMonthly' + i" min="0" [(ngModel)]="g.monthlyContribution" /></span>
+          </label>
+          <div><button type="button" class="secondary" (click)="removeGoal(i)" [attr.aria-label]="'Remove goal ' + (i + 1)">Remove</button></div>
+        </div>
+      }
+      @if (m.goals.length < 10) {
+        <div><button type="button" class="secondary" (click)="addGoal()">+ Add a goal</button></div>
+      }
+    </fieldset>
+
+    <div class="form-actions">
+      <button type="submit" [disabled]="saving()">{{ saving() ? 'Calculating…' : 'See my health check' }}</button>
+      <span class="muted small">Education and self-assessment, not financial advice.</span>
+    </div>
+  </form>
+</div>

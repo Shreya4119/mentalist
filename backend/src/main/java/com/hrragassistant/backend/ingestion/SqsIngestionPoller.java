@@ -16,7 +16,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
  * Long-polls the ingestion queue and hands each message to
  * DocumentIngestionService.processQueuedDocument(). No retry/DLQ in this
  * phase -- a failed document is marked FAILED (visible via
- * GET /api/documents/{id}) and the message is still deleted rather than
+ * GET /api/reports/{id}) and the message is still deleted rather than
  * redelivered. A real deployment would add a redrive policy / DLQ here.
  */
 @Component

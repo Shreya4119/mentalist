@@ -44,12 +44,16 @@ public class JwtService {
      */
     public java.util.Optional<Claims> parseClaims(String token) {
         try {
-            return java.util.Optional.of(Jwts.parser()
+            Claims claims = Jwts.parser()
                     .verifyWith(key)
                     .build()
                     .parseSignedClaims(token)
-                    .getPayload());
-        } catch (JwtException | IllegalArgumentException e) {
+                    .getPayload();
+            // A token minted before the role rename (HR_ADMIN/EMPLOYEE) is treated as
+            // invalid -> 401, so the app simply asks the user to sign in again.
+            roleFromClaims(claims);
+            return java.util.Optional.of(claims);
+        } catch (JwtException | IllegalArgumentException | NullPointerException e) {
             return java.util.Optional.empty();
         }
     }

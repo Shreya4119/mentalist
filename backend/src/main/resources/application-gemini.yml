@@ -1,0 +1,19 @@
+# Google Gemini (free tier) for chat, via its OpenAI-compatible endpoint.
+# Run with:  GEMINI_API_KEY=... ./mvnw spring-boot:run -Dspring-boot.run.profiles=gemini
+# Get a key at https://aistudio.google.com/apikey
+#
+# Note: Gemini's free tier may use prompts to improve Google's products --
+# only send synthetic / non-confidential documents through this profile.
+spring:
+  ai:
+    model:
+      chat: openai
+    openai:
+      base-url: https://generativelanguage.googleapis.com/v1beta/openai
+      api-key: ${GEMINI_API_KEY}
+      chat:
+        model: ${GEMINI_CHAT_MODEL:gemini-3.8-flash}
+
+app:
+  observability:
+    cost-per-1k-tokens-usd: 0

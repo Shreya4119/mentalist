@@ -40,6 +40,7 @@ public class ChatService {
     private final RedisTemplate<String, CachedAnswer> answerCacheTemplate;
     private final MeterRegistry meterRegistry;
     private final double costPer1kTokensUsd;
+    private final String chatProvider;
 
     public ChatService(
             ChatClient chatClient,
@@ -49,7 +50,8 @@ public class ChatService {
             FeedbackRepository feedbackRepository,
             RedisTemplate<String, CachedAnswer> answerCacheTemplate,
             MeterRegistry meterRegistry,
-            @Value("${app.observability.cost-per-1k-tokens-usd}") double costPer1kTokensUsd) {
+            @Value("${app.observability.cost-per-1k-tokens-usd}") double costPer1kTokensUsd,
+            @Value("${spring.ai.model.chat:ollama}") String chatProvider) {
         this.chatClient = chatClient;
         this.conversationRepository = conversationRepository;
         this.chatMessageRepository = chatMessageRepository;
@@ -58,6 +60,7 @@ public class ChatService {
         this.answerCacheTemplate = answerCacheTemplate;
         this.meterRegistry = meterRegistry;
         this.costPer1kTokensUsd = costPer1kTokensUsd;
+        this.chatProvider = chatProvider;
     }
 
     /**
@@ -65,8 +68,10 @@ public class ChatService {
      * prior turns. Continuing an existing conversation always bypasses the cache
      * and loads prior messages as context -- an identical question can
      * legitimately have a different answer depending on what was asked before it.
+     *
+     * A non-null documentId restricts retrieval to that document's chunks.
      */
-    public AskResult ask(UUID conversationId, String question) {
+    public AskResult ask(UUID conversationId, String question, UUID documentId) {
         Timer.Sample sample = Timer.start(meterRegistry);
         boolean cacheHit = false;
 
@@ -78,7 +83,7 @@ public class ChatService {
 
             chatMessageRepository.save(new ChatMessage(resolvedConversationId, MessageRole.USER, question));
 
-            CachedAnswer cachedAnswer = isNewConversation ? answerCacheTemplate.opsForValue().get(answerCacheKey(question)) : null;
+            CachedAnswer cachedAnswer = isNewConversation ? answerCacheTemplate.opsForValue().get(answerCacheKey(question, documentId)) : null;
 
             String answer;
             List<ChatCitation> citations;
@@ -97,6 +102,12 @@ public class ChatService {
                 ChatResponse chatResponse = chatClient.prompt()
                         .messages(priorMessages)
                         .user(question)
+                        .system(RagPrompts.REPORT_SYSTEM_PROMPT)
+                        .advisors(a -> {
+                            if (documentId != null) {
+                                a.param(QuestionAnswerAdvisor.FILTER_EXPRESSION, "document_id == '" + documentId + "'");
+                            }
+                        })
                         .call()
                         .chatResponse();
 
@@ -108,7 +119,7 @@ public class ChatService {
                 recordTokenUsage(chatResponse);
 
                 if (isNewConversation) {
-                    cacheAnswer(question, answer, citations);
+                    cacheAnswer(question, documentId, answer, citations);
                 }
             }
 
@@ -210,17 +221,23 @@ public class ChatService {
                 .toList();
     }
 
-    private void cacheAnswer(String question, String answer, List<ChatCitation> citations) {
+    private void cacheAnswer(String question, UUID documentId, String answer, List<ChatCitation> citations) {
         List<CachedCitation> cachedCitations = citations.stream()
                 .map(c -> new CachedCitation(c.getDocumentId(), c.getFilename(), c.getChunkIndex(), c.getChunkText()))
                 .toList();
 
         answerCacheTemplate.opsForValue().set(
-                answerCacheKey(question), new CachedAnswer(answer, cachedCitations), ANSWER_CACHE_TTL);
+                answerCacheKey(question, documentId), new CachedAnswer(answer, cachedCitations), ANSWER_CACHE_TTL);
     }
 
-    private static String answerCacheKey(String question) {
-        return ANSWER_CACHE_PREFIX + question.trim().toLowerCase(Locale.ROOT);
+    /**
+     * Keyed by chat provider and retrieval scope too, so switching profiles
+     * (ollama -> gemini, say) never serves another model's answer, and a
+     * document-scoped answer is never reused for an all-documents question.
+     */
+    private String answerCacheKey(String question, UUID documentId) {
+        String scope = documentId != null ? documentId.toString() : "all";
+        return ANSWER_CACHE_PREFIX + chatProvider + ":" + scope + ":" + question.trim().toLowerCase(Locale.ROOT);
     }
 
     @SuppressWarnings("unchecked")

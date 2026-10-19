@@ -1,5 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { ReportSummary, ReportsService } from '../reports/reports.service';
 import { ChatService, Citation, FeedbackRating } from './chat.service';
 
 interface DisplayMessage {
@@ -12,24 +15,87 @@ interface DisplayMessage {
 
 @Component({
   selector: 'app-chat',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './chat.html',
   styleUrl: './chat.css',
 })
-export class Chat {
+export class Chat implements OnInit, OnDestroy {
   private readonly chatService = inject(ChatService);
+  private readonly reportsService = inject(ReportsService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   readonly question = signal('');
   readonly messages = signal<DisplayMessage[]>([]);
   readonly sending = signal(false);
   readonly error = signal<string | null>(null);
+  readonly scopedDocument = signal<ReportSummary | null>(null);
+  /** Set when the route's report is missing or not ready; chatting is blocked. */
+  readonly scopeError = signal(false);
+  /**
+   * Chat only opens on a ready report: chat-ready once its AI analysis is done (the server
+   * checks too and answers 409 otherwise).
+   */
+  readonly canSend = computed(
+    () => !this.sending() && !this.scopeError() && !!this.scopedDocument()?.chatReady && this.question().trim().length > 0,
+  );
 
+  private readonly messagesEl = viewChild<ElementRef<HTMLElement>>('messagesEl');
+
+  private documentId = '';
   private conversationId: string | null = null;
   private localMessageCounter = 0;
+  private paramSubscription: Subscription | null = null;
+
+  constructor() {
+    // Keep the newest message (or the "Thinking…" bubble) in view.
+    effect(() => {
+      this.messages();
+      this.sending();
+      const el = this.messagesEl()?.nativeElement;
+      if (el) {
+        queueMicrotask(() => el.scrollTo({ top: el.scrollHeight }));
+      }
+    });
+  }
+
+  ngOnInit(): void {
+    this.paramSubscription = this.route.paramMap.subscribe((params) => {
+      const documentId = params.get('id') ?? '';
+      this.documentId = documentId;
+      this.conversationId = null;
+      this.messages.set([]);
+      this.error.set(null);
+      this.scopedDocument.set(null);
+      this.scopeError.set(false);
+
+      if (!documentId) {
+        this.router.navigate(['/reports']);
+        return;
+      }
+      this.reportsService.get(documentId).subscribe({
+        next: ({ report }) => {
+          this.scopedDocument.set(report);
+          if (!report.chatReady) {
+            this.scopeError.set(true);
+            this.error.set(`${report.filename} is still being analysed. Try again once its analysis is ready.`);
+          }
+        },
+        error: () => {
+          this.scopeError.set(true);
+          this.error.set('Could not load that report. It may have been removed.');
+        },
+      });
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.paramSubscription?.unsubscribe();
+  }
 
   ask(): void {
     const question = this.question().trim();
-    if (!question || this.sending()) {
+    if (!this.canSend()) {
       return;
     }
 
@@ -41,7 +107,7 @@ export class Chat {
     this.question.set('');
     this.sending.set(true);
 
-    this.chatService.ask(question, this.conversationId).subscribe({
+    this.chatService.ask(question, this.conversationId, this.documentId).subscribe({
       next: (response) => {
         this.conversationId = response.conversationId;
         this.messages.update((msgs) => [
@@ -56,9 +122,14 @@ export class Chat {
         ]);
         this.sending.set(false);
       },
-      error: () => {
+      error: (err: { status?: number }) => {
         this.sending.set(false);
-        this.error.set('Something went wrong asking that question. Please try again.');
+        if (err.status === 404 || err.status === 409) {
+          this.scopeError.set(true);
+          this.error.set('This report is no longer available for questions. Go back to Financial reports to pick another.');
+        } else {
+          this.error.set('Something went wrong asking that question. Please try again.');
+        }
       },
     });
   }
@@ -67,16 +138,20 @@ export class Chat {
     if (message.feedback) {
       return;
     }
+    this.error.set(null);
     this.chatService.submitFeedback(message.id, rating).subscribe({
       next: () => {
         this.messages.update((msgs) => msgs.map((m) => (m.id === message.id ? { ...m, feedback: rating } : m)));
       },
+      error: () => this.error.set('Could not save your feedback. Please try again.'),
     });
   }
 
   newConversation(): void {
     this.conversationId = null;
     this.messages.set([]);
-    this.error.set(null);
+    if (!this.scopeError()) {
+      this.error.set(null);
+    }
   }
 }

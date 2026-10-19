@@ -14,10 +14,17 @@ RUN ./mvnw -B package -DskipTests
 FROM eclipse-temurin:21-jre-jammy AS runtime
 WORKDIR /app
 
+# Fonts so PDF pages can be rendered to images (large-report preprocessing).
+RUN apt-get update && apt-get install -y --no-install-recommends fontconfig fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/target/*.jar app.jar
+# /data/uploads holds report files (STORAGE_DIR); created here so the
+# named volume inherits appuser ownership.
 RUN useradd --system --create-home --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /data/uploads \
+    && chown -R appuser:appuser /app /data
 USER appuser
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Djava.awt.headless=true", "-jar", "app.jar"]

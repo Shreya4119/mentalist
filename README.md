@@ -1,318 +1,87 @@
-# HR/Payroll Knowledge Assistant (RAG)
+# Mentalist: understand company reports, learn to invest
 
-An internal assistant that answers natural-language HR and payroll questions —
-*"How many vacation days carry over into next year?"* — grounded in a
-company's own policy documents, with answers traceable back to source text.
+Mentalist reads a company's annual report or balance sheet and explains its
+financial health in plain language, for students, expats and working
+professionals without a finance background. Upload a report and get a 0–100
+health score, every ratio with its formula and meaning, charts, red flags,
+and answers to your own questions, each traced back to the report. A
+**Learn** section explains every term.
 
-**Status: complete (all planned phases).** The full backend (ingestion,
-retrieval with citations, JWT/RBAC, Redis caching, conversation memory,
-async SQS ingestion, observability, Testcontainers) plus a working Angular
-frontend all run end-to-end in the browser, both Docker images build and
-run as a complete containerized stack, a GitHub Actions CI/CD pipeline is
-written (unverified until pushed — see "CI/CD"), and the target AWS
-deployment is fully expressed as validated Terraform without ever spending
-a dollar on it (see `deploy/DEPLOYMENT.md`).
+It is decision support and education, **not investment advice**; every
+analysis says so.
+
+> **History.** This project began as an HR/payroll knowledge assistant (RAG
+> over policy documents). That feature has been removed; the Java package
+> (`com.hrragassistant`), the database name (`hrrag`) and the `hr_document`
+> table keep their original names so existing installs carry on unchanged.
+> Rename them when Flyway migrations are introduced.
 
 ## Architecture
 
 ```
-Angular SPA (frontend/, ng serve --> localhost:4200, proxies /api to :8080)
-                                        |
-                                        v
-                                Spring Boot API (Spring AI ChatClient)
-                                        |
-                          +-------------+-------------+
-                          |                           |
-                 POST /api/documents           POST /api/chat
-                 (202, status QUEUED)                  |
-                          |                   QuestionAnswerAdvisor
-                          v                   similarity search --> PostgreSQL + pgvector
-                 SQS (LocalStack)                      |
-                          |                    generation --> Ollama (llama3.2)
-                          v                             |
-              SqsIngestionPoller              citations + conversation/message
-              (background, long-polling)      history persisted (JPA/Postgres)
-                          |
-                 Tika parse -> chunk
-                 (overlapping token
-                  splitter) -> embed
-                          |
-                          v
-                 PostgreSQL + pgvector
-                 (chunks + embeddings)
-
-Embeddings: Ollama nomic-embed-text (768 dims), served by a local Ollama daemon
-Metrics: Micrometer -> Actuator (/actuator/metrics, /actuator/prometheus)
+Angular 21 (Financial reports · Learn · report chat)
+        │  /api/**  (JWT)
+Spring Boot 4 / Java 21
+  ├─ reports      upload, AI analysis (Gemini or Claude), ratios, health score, compare
+  ├─ ingestion    SQS (LocalStack) → Tika → chunks → pgvector (Ollama nomic-embed-text)
+  ├─ chat         questions about ONE report, answers cite the report and its analysis
+  └─ auth         JWT, roles ADMIN / USER
+        │
+PostgreSQL + pgvector · Redis (answer + embedding cache) · LocalStack SQS
 ```
 
-- **Backend**: Java 21, Spring Boot 4, Spring AI 2 (`backend/`)
-- **Vector store**: PostgreSQL with the `pgvector` extension
-- **Relational data**: documents, conversations, messages, citations,
-  feedback, and users are plain JPA entities in the same Postgres instance
-- **Queue**: SQS via LocalStack (free, no AWS account) — plain AWS SDK v2
-  `SqsClient`, not Spring Cloud AWS (see "Design decisions")
-- **LLM + embeddings**: local Ollama (`llama3.2` for chat, `nomic-embed-text`
-  for embeddings) — free, no cloud account. Amazon Bedrock (Claude + Titan)
-  remains a documented, config-only swap (see "Switching back to Bedrock")
-- **Frontend**: Angular 21, standalone components + signals, no NgModules
-  (`frontend/`) — login, chat with citations/feedback, HR-admin document
-  upload with status polling
-
-## Design decisions
-
-- **Chunking**: a custom `OverlappingTokenTextSplitter` slides a 500-token
-  window with 50-token overlap across each document, using the same
-  tokenizer (`cl100k_base` via jtokkit) Spring AI's own splitter uses.
-  Spring AI's built-in `TokenTextSplitter` doesn't support overlap natively
-  (see [spring-projects/spring-ai#2123](https://github.com/spring-projects/spring-ai/issues/2123)),
-  so this fills that gap directly rather than dropping the requirement.
-- **Parsing**: `TikaDocumentReader` handles PDF/DOCX/TXT (and most other
-  common formats) via content-type sniffing — no manual format branching.
-- **Retrieval**: Spring AI's `QuestionAnswerAdvisor` does similarity search +
-  prompt augmentation, configured for `topK(5)` per the spec's 4–6
-  recommendation.
-- **Grounding / anti-hallucination**: the shared `ChatClient` carries a
-  default system prompt instructing the model to answer only from the
-  provided context and say *"I don't know based on the available documents"*
-  otherwise.
-- **Citations**: each assistant answer persists the exact retrieved chunks
-  (source document, filename, chunk index, chunk text) used to generate
-  it — pulled straight off `QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS` in the
-  `ChatResponse` metadata, so citations are what was *actually* used, not a
-  re-derived guess.
-- **Async ingestion (SQS via LocalStack)**: `POST /api/documents` now
-  persists the upload (status `QUEUED`) and returns `202 Accepted`
-  immediately; a background poller (`SqsIngestionPoller`, long-polling
-  `receiveMessage`) does the actual parse/chunk/embed/store work. Uses the
-  plain AWS SDK v2 `SqsClient` directly, not the Spring Cloud AWS SQS
-  starter (`@SqsListener`) — that starter's confirmed compatibility only
-  goes up to Spring Boot 3.2.x, and this project is on the very recent
-  Spring Boot 4.1.0. The SDK client itself has zero Spring Boot version
-  coupling, so this sidesteps the risk entirely (the same reasoning as
-  hand-rolling JWT over a heavier framework piece in Phase 2). No S3: raw
-  upload bytes are stashed in a new `hr_document.content bytea` column so
-  the background consumer has something to process after the HTTP request
-  completes — S3 (via LocalStack too) would be the production-shaped
-  choice, kept out to avoid a second AWS service in an already-large phase.
-  No retry/DLQ either: a failed message is still deleted (status becomes
-  `FAILED`, visible via `GET /api/documents/{id}`) rather than redelivered
-  — a natural "what would you add next" answer, not a gap to hide.
-- **Observability**: `ChatService.ask()` records a Micrometer `Timer`
-  (`chat.request.latency`, tagged `cache=hit|miss`) and token/cost counters
-  (`chat.tokens{type=prompt|completion}`, `chat.cost.usd`) via Actuator.
-  Ollama itself is free, so the cost figure is illustrative — computed from
-  a configurable `$/1k tokens` rate — the point is proving the
-  instrumentation exists for when a paid provider (e.g. Bedrock) is swapped
-  back in. Cache hits record zero token/cost metrics, honestly reflecting
-  that no model call happened.
-- **Testcontainers**: one integration test spins up a *real*
-  Postgres+pgvector container (per the spec's explicit ask) and asserts
-  ingestion produces the right chunk count and that a similarity search for
-  the seeded question returns the correct chunk as the top hit — a
-  deterministic, testable claim, unlike asserting on generated LLM prose. A
-  throwaway Redis container is included too so the full app context boots
-  cleanly and hermetically; SQS is mocked (the test calls
-  `processQueuedDocument()` directly rather than going through the queue).
-  Embeddings still use the host's already-required Ollama daemon rather
-  than `testcontainers-ollama`, to avoid pulling model weights on every
-  test run — a fully hermetic CI setup would add that module later.
-- **Local-first model provider**: Ollama needs no account, no card, and no
-  internet after the models are pulled — see "Switching back to Bedrock" for
-  why this doesn't cost the project its cloud-AI story.
-- **Schema management**: `spring.jpa.hibernate.ddl-auto=update` auto-creates
-  the relational tables for now. That's a dev-only convenience — a real
-  migration tool (Flyway/Liquibase) is the honest choice once this needs to
-  run anywhere besides a laptop, and is a natural Phase 3 addition alongside
-  the other "production patterns."
-- **Auth**: hand-rolled JWT (via `jjwt`), not
-  `spring-security-oauth2-resource-server` — that starter targets validating
-  tokens from an *external* identity provider, and this app is both issuer
-  and validator, so a plain `JwtService` + a request filter is the
-  right-sized tool. Two seeded demo accounts (`hr_admin` / `employee`, see
-  below) stand in for a registration flow, which is out of scope — the point
-  of this phase is proving RBAC actually gates `/api/documents/**` to
-  `HR_ADMIN`, not building account management.
-- **Caching vs. conversation memory**: the spec asks for caching "answers for
-  repeated questions," but once memory (this phase) feeds prior turns into
-  the prompt, an identical question can legitimately get a different answer
-  depending on conversation context. Resolution: full answers are cached in
-  Redis only for **stateless, first-turn questions** (no `conversationId` on
-  the request) — the common "many employees ask the same FAQ" case — and the
-  cache is always bypassed once a conversation has follow-up turns.
-  Embeddings, by contrast, are cached unconditionally: they're a pure
-  function of the input text, so there's no such conflict. The embedding
-  cache wraps the `EmbeddingModel` bean itself (`CachingEmbeddingModel`,
-  `@Primary`), so ingestion and retrieval both benefit with no code changes
-  of their own.
-- **Conversation memory**: continuing a conversation loads its last 10
-  persisted messages (5 exchanges) and passes them to the `ChatClient` as
-  prior turns, so follow-ups actually have context. New conversations skip
-  this entirely (nothing to load) and are the only ones eligible for answer
-  caching.
-- **Frontend/backend integration — dev-server proxy, not CORS**: the Angular
-  dev server proxies `/api/**` to `localhost:8080` (`frontend/proxy.conf.json`),
-  so browser requests are same-origin during `ng serve` and `SecurityConfig`
-  needed zero changes for this phase. The app calls relative `/api/...`
-  paths throughout, which also keeps it deployment-flexible — a real deploy
-  would serve both from one origin or a reverse proxy rather than needing
-  CORS at all.
-- **Frontend auth**: the JWT lives in `localStorage` (survives reloads; the
-  tradeoff is XSS exposure vs. an httpOnly cookie, which would need backend
-  changes too — reasonable for a demo app, not silently accepted). A
-  functional `authInterceptor` attaches the bearer token and treats any
-  401/403 as "session invalid" (logout + redirect to `/login`); a
-  functional `authGuard`/`hrAdminGuard` pair gates routes by
-  authentication/role. There's no refresh-token flow — the JWT expires
-  after 1 hour and the interceptor's 401/403 handling is what catches that,
-  not a silent refresh.
-- **No conversation-list UI**: one active conversation per browser session,
-  matching the spec's literal "Angular chat UI" ask and the fact that the
-  backend has no endpoint to enumerate a user's past conversations anyway.
-- **Two docker-compose files, not one**: `docker-compose.yml` stays
-  dev-infra-only (Postgres/Redis/LocalStack, auto-managed by Spring Boot's
-  own docker-compose lifecycle during `mvn spring-boot:run`).
-  `docker-compose.prod.yml` is a separate, complete containerized stack
-  (backend + frontend + infra) — different purpose, different lifecycle,
-  shouldn't be conflated. It uses an explicit Compose project name
-  (confirmed necessary — without it, the two files' same-named services
-  collided under the directory-derived default project name and `up`
-  recreated the dev stack's containers in place instead of creating
-  separate ones).
-- **AWS deployment is docs/Terraform-only, never applied**: consistent
-  with every other cost-avoidance decision in this project (Ollama instead
-  of Bedrock, LocalStack instead of real SQS) — no AWS account was ever
-  needed to build or run this. `deploy/terraform/` is validated with
-  `terraform validate` against the real AWS provider schema (confirmed
-  clean), not just written and hoped; `deploy/DEPLOYMENT.md` covers what it
-  provisions and what's simplified (default VPC, no Multi-AZ, etc).
-- **CI publishes to GHCR, not ECR**: pushing to ECR from CI would need AWS
-  credentials as GitHub secrets, which doesn't fit "no AWS account." GHCR
-  needs zero setup (the built-in `GITHUB_TOKEN`) and still proves the full
-  build → test → publish pipeline. `.github/workflows/ci.yml` is
-  unverified in the sense that it's never actually run — this repo has no
-  GitHub remote — but is written to current, confirmed action versions.
+- **AI extracts, Java computes**: the model only reads figures from the
+  report; every ratio and the health score are computed in tested Java code.
+- **Chat is always scoped** to one report (`document_id` filter on retrieval).
+- **Async everything**: ingestion runs via SQS, analysis via `@Async`; both
+  recover after a restart.
 
 ## Prerequisites
 
 - Java 21
-- Docker Desktop (for Postgres + pgvector, Redis, and now LocalStack)
-- [Ollama](https://ollama.com) running locally, with the two models pulled:
+- Docker Desktop (Postgres + pgvector, Redis, LocalStack)
+- [Ollama](https://ollama.com) for embeddings (and local chat, if you don't
+  use a cloud profile):
   ```bash
-  ollama pull llama3.2
   ollama pull nomic-embed-text
+  ollama pull llama3.2
   ```
+- An AI key for report analysis in `backend/.env`: `GEMINI_API_KEY` and/or
+  `ANTHROPIC_API_KEY` (see "Providers" below).
 
 ## Running it
 
 ```bash
+# terminal 1 — backend (starts Postgres/Redis/LocalStack via Docker Compose)
 cd backend
-./mvnw spring-boot:run
-```
+mvnw spring-boot:run "-Dspring-boot.run.profiles=gemini"     # Windows cmd/PowerShell
+./mvnw spring-boot:run -Dspring-boot.run.profiles=gemini     # Git Bash / macOS / Linux
 
-This starts Postgres and Redis via Docker Compose automatically, and
-initializes the pgvector schema (768 dimensions, matching
-`nomic-embed-text`) plus the JPA tables for documents, conversations,
-messages, citations, feedback, and users. Two demo accounts are seeded on
-first boot (dev-only, not for anything beyond a laptop):
-
-| Username | Password | Role |
-|---|---|---|
-| `hr_admin` | `hr-admin-pass` | `HR_ADMIN` |
-| `employee` | `employee-pass` | `EMPLOYEE` |
-
-### 0. Log in
-
-```bash
-curl -X POST localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"hr_admin","password":"hr-admin-pass"}'
-```
-```json
-{"token": "eyJ...", "role": "HR_ADMIN"}
-```
-
-Every other endpoint below needs `-H "Authorization: Bearer <token>"`.
-`/api/documents/**` requires an `HR_ADMIN` token; `/api/chat/**` accepts
-either role.
-
-### 1. Upload a document
-
-A sample policy document is included at `sample-data/leave-policy.txt`.
-Ingestion is async now, so the response comes back immediately with status
-`QUEUED`:
-
-```bash
-curl -F "file=@sample-data/leave-policy.txt" \
-  -H "Authorization: Bearer <hr_admin token>" \
-  localhost:8080/api/documents
-```
-```json
-{"id":"...", "filename":"leave-policy.txt", "status":"QUEUED", "chunkCount":null, ...}
-```
-```
-HTTP/1.1 202 Accepted
-```
-
-### 2. Poll its status
-
-A background poller picks the message off the SQS (LocalStack) queue within
-a second or two and processes it — `QUEUED` → `PROCESSING` → `INDEXED` (or
-`FAILED`, with `errorMessage` set, if parsing failed):
-
-```bash
-curl -H "Authorization: Bearer <token>" localhost:8080/api/documents/{id}
-```
-
-### 3. Ask a question
-
-```bash
-curl -X POST localhost:8080/api/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"question":"How many vacation days carry over into next year?"}'
-```
-```json
-{
-  "conversationId": "...",
-  "messageId": "...",
-  "answer": "...",
-  "citations": [{"documentId": "...", "filename": "leave-policy.txt", "chunkIndex": 0, "chunkText": "..."}]
-}
-```
-
-Asking the exact same question again (still with no `conversationId`) comes
-back from the Redis answer cache. Pass the returned `conversationId` on a
-follow-up call to continue the same conversation with memory — and note
-that path always calls the model fresh, never the cache.
-
-### 4. Read the conversation back
-
-```bash
-curl -H "Authorization: Bearer <token>" localhost:8080/api/chat/{conversationId}
-```
-
-### 5. Leave feedback on an answer
-
-```bash
-curl -X POST localhost:8080/api/chat/{messageId}/feedback \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"rating":"UP"}'
-```
-
-## Running the frontend
-
-With the backend already running (previous section) and Docker/Ollama up:
-
-```bash
+# terminal 2 — frontend
 cd frontend
 npm install
-npm start
+npm start          # http://localhost:4200, proxies /api/** to :8080
 ```
 
-Opens at `http://localhost:4200`, proxying `/api/**` to the backend on
-`:8080` (see `proxy.conf.json`). Log in with either demo account from the
-table above — the "Documents" nav link only appears for `hr_admin`.
+Demo accounts (seeded on first boot, dev-only):
+
+| Username | Password | Role | Can |
+|---|---|---|---|
+| `admin` | `admin-pass` | `ADMIN` | manage every report |
+| `demo` | `demo-pass` | `USER` | read every report, manage their own uploads |
+
+**Upgrading from the HR version:** on the first start, `LegacyHrCleanup`
+renames the old accounts (`hr_admin` → `admin`, `employee` → `demo`, with the
+passwords above, keeping their reports), renames the roles, and deletes the
+old HR policy documents and their indexed chunks. Browsers signed in to the
+old version are asked to sign in again.
+
+## Running tests
+
+```bash
+cd backend && mvnw test          # unit tests + Testcontainers pgvector test (needs Docker)
+cd frontend && npm run e2e       # Playwright UI suite against a mocked API (no backend needed)
+```
 
 ## Metrics
 
@@ -327,17 +96,6 @@ curl localhost:8080/actuator/prometheus   # Prometheus-scrape-ready format
 real deployment would put it behind a separate management port or network
 policy rather than leave it public.
 
-## Running tests
-
-```bash
-cd backend
-./mvnw test
-```
-
-`IngestionPgVectorIntegrationTest` spins up real Postgres+pgvector (and a
-throwaway Redis) via Testcontainers, independent of the dev database, and
-needs Docker running — nothing else from the dev stack needs to be up.
-
 ## Running it fully containerized
 
 No local Java/Maven/Node needed — just Docker and a host-run Ollama
@@ -349,8 +107,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Brings up the entire stack (backend, frontend, Postgres+pgvector, Redis,
 LocalStack) under its own Compose project name
-(`hr-rag-assistant-prod`, kept separate from the dev stack on purpose — see
-"Design decisions"). Give the backend ~15–20s to finish booting on first
+(`hr-rag-assistant-prod`, kept separate from the dev stack on purpose). Give the backend ~15–20s to finish booting on first
 run, then:
 
 - Frontend: `http://localhost:8081`
@@ -386,6 +143,154 @@ schema (clean, no errors), never applied against a real account. Same
 reasoning as the Ollama/LocalStack choices throughout this project: prove
 it's deployable without spending anything to prove it.
 
+## Financial reports: AI fundamental analysis
+
+The **Financial reports** area (the home screen) reads company balance sheets and
+annual reports — tables, charts, images and scanned pages included — and
+produces a plain-language financial health check. It is decision support for
+investors, **not investment advice**; every page says so.
+
+### Workflow
+
+1. **Upload** a report (PDF, PNG/JPG/WEBP/TIFF, XLSX/XLS/CSV, DOCX or TXT, up to 250 MB; several page photos at once become one report).
+   Pick the AI provider if more than one is configured.
+2. The report is stored as a `FINANCIAL_REPORT` document and two things run
+   in the background:
+   - **AI analysis** (`ReportAnalysisWorker`, `@Async`): the model reads the
+     whole file natively and fills a fixed extraction schema.
+   - **Indexing for chat** (the existing SQS → Tika → pgvector pipeline).
+3. The **analysis page** shows: a 0–100 health score with six area scores,
+   a plain-language summary, strengths and red flags with evidence, charts
+   (performance and financial position, current vs prior period; assets vs
+   funding), every ratio with its formula using the report's own figures,
+   the source figures table with page references, what the report's charts
+   show, management outlook, and how the figures were read.
+4. **Ask questions about this report** opens the document-scoped chat with a
+   financial-analyst prompt. The analysis itself is indexed too, so chat can
+   cite the computed ratios.
+5. **Compare** any two analysed reports (two years of one company, or two
+   companies): scores side by side, what improved / got worse, ratio and
+   figure tables, and warnings when currencies, units or industries differ.
+
+### Design: the AI extracts, Java computes
+
+The model is only asked to **read** 15 standard line items (current and
+prior period, with page references) and write the narrative. All ratios and
+the health score are computed in plain Java (`reports.analysis`):
+
+- `RatioCalculator` — 16 ratios across profitability, liquidity, leverage,
+  cash flow, efficiency and growth, with fixed formulas and published
+  rule-of-thumb thresholds. Banks/insurers skip ratios that don't apply to
+  them; negative equity, losses and zero interest are handled explicitly.
+- `HealthScorer` — Healthy 100 / Caution 60 / Concern 20 per ratio, averaged
+  per area, weighted (Profitability 25, Liquidity 20, Leverage 20, Cash flow
+  20, Growth 10, Efficiency 5). Strong ≥ 75, Stable 55–74, Watch 35–54,
+  Weak < 35; fewer than 4 ratios → "Insufficient data" instead of a score.
+- `ReportComparator` — deterministic side-by-side comparison.
+
+So numbers are reproducible and auditable, and a model arithmetic slip can't
+change the verdict.
+
+### Large files and other edge cases
+
+Annual reports are often far bigger than what an AI model accepts in one go (Adyen's is 137 MB). Mentalist handles this before the model sees the file:
+
+| Situation | What happens |
+|---|---|
+| PDF over the provider's size or page limit (Gemini ~48 MB / 500 pages, Claude ~22 MB / 100 pages) | Pages are scored and the financial statements, key figures, auditor's report, notes and outlook are kept (English, Dutch, German titles). The report page lists exactly which pages were analysed and why. |
+| Still too big (image-heavy pages) | Key pages are rendered as compressed page images, then fewer pages, then text only; otherwise a clear message. |
+| Scanned PDF or photos | Pages are spread across the report; chat says answers come from the analysis only. |
+| Password-protected PDF | Clear message asking for an unlocked copy. Owner-only restrictions (no printing/copying) are removed automatically. |
+| Damaged PDF | Sent as-is when within limits, else a clear message. |
+| Large images | Scaled down to the provider's limit. TIFF/GIF/BMP are converted to PDF (multi-page TIFF supported). HEIC gets an "export as JPG" tip. |
+| Renamed / fake files | Detected from the file's contents, not its name. |
+| Same file uploaded twice | Detected by SHA-256; you are taken to the existing report. |
+| Temporary AI errors (429, 5xx, overloaded, timeouts) | Retried 3 times with 15 s / 45 s back-off. |
+| Few figures found | The report is flagged as possibly not meaningful. |
+
+Uploads are streamed to disk (not held in memory or stored in Postgres). Settings:
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `REPORTS_MAX_UPLOAD_MB` | 250 | Max size of one upload |
+| `REPORTS_MAX_REQUEST_MB` | 300 | Max request size (several photos) |
+| `STORAGE_DIR` | `./data/uploads` (`/data/uploads` in Docker, on the `proddata_uploads` volume) | Where uploaded files are kept |
+| `REPORTS_ANALYSIS_THREADS` | 2 | Analyses running at once |
+
+The frontend's nginx allows 300 MB request bodies for `/api/`.
+
+### Providers
+
+| Provider | Setting | Default model | Native PDF limit | Notes |
+|---|---|---|---|---|
+| Google Gemini | `GEMINI_API_KEY` | `gemini-3.8-flash` | 50 MB / 1,000 pages (Files API above 15 MB) | Free tier may use content for training: public reports only |
+| Anthropic Claude | `ANTHROPIC_API_KEY` | `claude-sonnet-5-5` | ~22 MB file (32 MB request) / 600 pages | Paid |
+
+Put keys in `backend/.env`. Override models with `REPORTS_GEMINI_MODEL` /
+`REPORTS_CLAUDE_MODEL`, the default with `REPORTS_DEFAULT_PROVIDER`. Files
+over a provider's native limit, and spreadsheets/Word files, are analysed
+from extracted text, and the analysis says so.
+
+### API
+
+| Method | Path | Who |
+|---|---|---|
+| GET | `/api/reports/providers` | any signed-in user |
+| GET | `/api/reports` | any signed-in user |
+| POST | `/api/reports` (multipart `file`, optional `provider`) → 202 | any signed-in user |
+| GET | `/api/reports/{id}` | any signed-in user |
+| POST | `/api/reports/{id}/analysis?provider=` → 202 | uploader or admin |
+| DELETE | `/api/reports/{id}` | uploader or admin |
+| GET | `/api/reports/compare?a=&b=` | any signed-in user |
+
+Analyses interrupted by a restart are marked failed on startup, with a
+"Re-analyze" button. Metric: `reports.analysis.latency` (tags provider,
+outcome).
+
+## Free cloud chat models (Gemini, Groq)
+
+Chat generation can run on a free cloud tier instead of local Ollama, with
+no code changes, just a Spring profile. Embeddings **always** stay on Ollama
+(`nomic-embed-text`, 768 dims), so the pgvector index and every already
+indexed report keep working when you switch.
+
+| Profile | Provider | Default model | Override with | Key from |
+|---|---|---|---|---|
+| *(none)* | Ollama (local) | `llama3.2` | `OLLAMA_CHAT_MODEL` | none |
+| `gemini` | Google Gemini | `gemini-3.8-flash` | `GEMINI_CHAT_MODEL` | [AI Studio](https://aistudio.google.com/apikey) |
+| `groq` | Groq | `llama-3.3-70b-versatile` | `GROQ_CHAT_MODEL` | [Groq console](https://console.groq.com/keys) |
+
+Put keys in `backend/.env` (git-ignored, loaded automatically via
+`spring.config.import`), e.g. `GEMINI_API_KEY=...`, or set them as environment
+variables:
+
+```bash
+# PowerShell, with the key in backend/.env
+./mvnw spring-boot:run "-Dspring-boot.run.profiles=gemini"
+
+# Git Bash
+GROQ_API_KEY=... ./mvnw spring-boot:run -Dspring-boot.run.profiles=groq
+```
+
+For the containerized stack, set `SPRING_PROFILES_ACTIVE` plus the matching
+key on the backend service.
+
+How it works: both Gemini and Groq expose OpenAI-compatible APIs, so the
+profiles use `spring-ai-starter-model-openai` with a different `base-url`.
+`spring.ai.model.chat` (`ollama` / `openai`) picks which `ChatModel` is
+auto-configured; `spring.ai.model.embedding=ollama` pins embeddings, and the
+OpenAI starter's image/audio/moderation models are set to `none` so it never
+needs a key in the default profile. The Redis answer cache key includes the
+provider, so switching profiles never serves another model's answer.
+
+Caveats:
+- **Free tiers may use your prompts for training** (Gemini's does). Only
+  use public reports with these profiles.
+- **Rate limits are tight**, so pace bulk evaluation runs.
+- Free-tier model availability changes. If the default model returns a
+  403/404/429, set the `*_CHAT_MODEL` variable to a model the free tier
+  currently lists.
+
 ## Switching back to Bedrock
 
 Phase 0 originally targeted Amazon Bedrock (Claude for generation, Titan for
@@ -395,7 +300,7 @@ replace the `spring-ai-starter-model-ollama` dependency with
 point `spring.ai.bedrock.*` at your AWS region/model, and update
 `spring.ai.vectorstore.pgvector.dimensions` to match Titan's embedding size
 (1024) instead of `nomic-embed-text`'s 768. No RAG/ingestion/chat code
-changes needed — the `ChatModel`/`EmbeddingModel`/`VectorStore` abstractions
+changes needed: the `ChatModel`/`EmbeddingModel`/`VectorStore` abstractions
 are provider-agnostic.
 
 ## What a real production deployment would still need

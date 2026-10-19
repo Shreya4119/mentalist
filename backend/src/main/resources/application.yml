@@ -1,6 +1,11 @@
 spring:
   application:
-    name: hr-rag-assistant-backend
+    name: mentalist-backend
+
+  # Local secrets (API keys) live in backend/.env, which is git-ignored.
+  # Optional: the app starts fine without it.
+  config:
+    import: optional:file:.env[.properties]
 
   datasource:
     url: jdbc:postgresql://localhost:5432/hrrag
@@ -18,8 +23,11 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 20MB
+      # Annual reports full of photos can exceed 100 MB. Uploads are streamed to
+      # disk (above 2 MB) and then shrunk per AI provider before analysis.
+      max-file-size: ${REPORTS_MAX_UPLOAD_MB:250}MB
+      max-request-size: ${REPORTS_MAX_REQUEST_MB:300}MB
+      file-size-threshold: 2MB
 
   data:
     redis:
@@ -27,6 +35,21 @@ spring:
       port: ${REDIS_PORT:6379}
 
   ai:
+    # Which provider backs each model type. Chat defaults to local Ollama;
+    # the "gemini" and "groq" profiles switch it to the OpenAI-compatible
+    # client. Embeddings always stay on Ollama (nomic-embed-text, 768 dims) --
+    # changing the embedding model would change the vector size and force a
+    # full re-index. The OpenAI starter's other model types are switched off
+    # so it never asks for an API key it doesn't need.
+    model:
+      chat: ollama
+      embedding: ollama
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       chat:
@@ -52,6 +75,30 @@ app:
       queue-name: ${AWS_SQS_QUEUE_NAME:document-ingestion}
   observability:
     cost-per-1k-tokens-usd: ${COST_PER_1K_TOKENS_USD:0.003}
+  # Uploaded report files live here, not in Postgres (relative to where the backend starts).
+  storage:
+    dir: ${STORAGE_DIR:./data/uploads}
+  # AI fundamental analysis of financial reports. Both providers read PDFs
+  # natively (tables, charts, scanned pages). A provider without an API key is
+  # shown as unavailable in the UI. Keys go in backend/.env.
+  reports:
+    max-upload-mb: ${REPORTS_MAX_UPLOAD_MB:250}
+    # Analyses running at once; each holds one (already shrunk) report in memory.
+    analysis-threads: ${REPORTS_ANALYSIS_THREADS:2}
+    default-provider: ${REPORTS_DEFAULT_PROVIDER:gemini}
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      model: ${REPORTS_GEMINI_MODEL:gemini-3.8-flash}
+    claude:
+      api-key: ${ANTHROPIC_API_KEY:}
+      model: ${REPORTS_CLAUDE_MODEL:claude-sonnet-5-5}
+      max-tokens: ${REPORTS_CLAUDE_MAX_TOKENS:16000}
+
+server:
+  tomcat:
+    # Read the rest of an over-limit upload so the browser gets the 413 message
+    # instead of a dropped connection.
+    max-swallow-size: -1
 
 management:
   endpoints:

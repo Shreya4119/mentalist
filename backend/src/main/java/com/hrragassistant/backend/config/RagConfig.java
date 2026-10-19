@@ -11,12 +11,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RagConfig {
 
-    private static final String GROUNDING_SYSTEM_PROMPT = """
-            You are an HR/payroll knowledge assistant. Answer the user's question using ONLY the
-            document context provided to you. If the context does not contain the answer, say
-            "I don't know based on the available documents" instead of guessing or using outside
-            knowledge.
-            """;
 
     @Bean
     ChatClient chatClient(ChatModel chatModel, VectorStore vectorStore) {
@@ -25,7 +19,7 @@ public class RagConfig {
                 .build();
 
         return ChatClient.builder(chatModel)
-                .defaultSystem(GROUNDING_SYSTEM_PROMPT)
+                .defaultSystem(com.hrragassistant.backend.chat.RagPrompts.REPORT_SYSTEM_PROMPT)
                 .defaultAdvisors(questionAnswerAdvisor)
                 .build();
     }

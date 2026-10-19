@@ -19,13 +19,16 @@ export class Login {
   readonly loading = signal(false);
 
   submit(): void {
+    if (this.loading() || !this.username().trim() || !this.password()) {
+      return;
+    }
     this.error.set(null);
     this.loading.set(true);
 
     this.authService.login(this.username(), this.password()).subscribe({
       next: () => {
         this.loading.set(false);
-        this.router.navigate(['/chat']);
+        this.router.navigate(['/reports']);
       },
       error: () => {
         this.loading.set(false);

@@ -2,16 +2,21 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
-export type Role = 'HR_ADMIN' | 'EMPLOYEE';
+export type Role = 'ADMIN' | 'USER';
 
 interface LoginResponse {
   token: string;
   role: Role;
 }
 
-const TOKEN_KEY = 'hr_rag_token';
-const ROLE_KEY = 'hr_rag_role';
-const USERNAME_KEY = 'hr_rag_username';
+const TOKEN_KEY = 'mentalist_token';
+const ROLE_KEY = 'mentalist_role';
+const USERNAME_KEY = 'mentalist_username';
+
+// Sessions saved under the old keys carry role names that no longer exist: drop them.
+for (const legacyKey of ['hr_rag_token', 'hr_rag_role', 'hr_rag_username']) {
+  localStorage.removeItem(legacyKey);
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -25,7 +30,7 @@ export class AuthService {
   readonly role = this.roleSignal.asReadonly();
   readonly username = this.usernameSignal.asReadonly();
   readonly isAuthenticated = computed(() => this.tokenSignal() !== null);
-  readonly isHrAdmin = computed(() => this.roleSignal() === 'HR_ADMIN');
+  readonly isAdmin = computed(() => this.roleSignal() === 'ADMIN');
 
   login(username: string, password: string): Observable<LoginResponse> {
     return this.http.post<LoginResponse>('/api/auth/login', { username, password }).pipe(

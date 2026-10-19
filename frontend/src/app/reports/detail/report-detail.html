@@ -1,0 +1,291 @@
+<div class="reports-page detail">
+  <a [routerLink]="backLink().link" [queryParams]="backLink().query" class="back-link">← {{ backLink().label }}</a>
+
+  @if (loadError()) {
+    <p class="error" role="alert">{{ loadError() }}</p>
+  } @else if (!report()) {
+    <p class="muted">Loading report…</p>
+  } @else {
+    @let r = report()!;
+    @let a = analysis();
+
+    @if (duplicate()) {
+      <p class="notice-banner" role="status" data-testid="duplicate-banner">
+        You've already uploaded this exact file, so here is the existing report instead of a new copy.
+      </p>
+    }
+
+    <header class="detail-header">
+      <div>
+        <h1>{{ title() }}</h1>
+        <p class="subtitle">
+          @if (a) {
+            {{ a.extraction.reportingPeriod || 'Period not stated' }}
+            @if (a.extraction.statementBasis) { · {{ a.extraction.statementBasis }}<app-info-tip term="consolidated" /> }
+            @if (a.extraction.unit) { · Figures in {{ a.extraction.unit }}<app-info-tip term="reportingUnit" /> }
+            @if (a.extraction.industry) { · {{ a.extraction.industry }} }
+          } @else {
+            {{ r.filename }}
+          }
+        </p>
+      </div>
+      <div class="header-actions">
+        <button type="button" (click)="scrollToAsk()" [disabled]="!r.chatReady"
+                [title]="r.chatReady ? 'Ask questions about this report' : 'Available once the analysis finishes'">
+          Ask questions about this report
+        </button>
+      </div>
+    </header>
+
+    @if (actionError()) {
+      <p class="error" role="alert">{{ actionError() }}</p>
+    }
+
+    @if (a && showGuide()) {
+      <section class="card guide-card" aria-labelledby="guide-title">
+        <div class="guide-head">
+          <h2 class="section-title" id="guide-title">New to investing? How to read this page</h2>
+          <button type="button" class="secondary small-btn" (click)="dismissGuide()">Got it, hide this</button>
+        </div>
+        <ol class="guide-steps">
+          <li><strong>Health score</strong> — one 0–100 verdict from 16 checks, plus which areas are strong or weak.</li>
+          <li><strong>Plain language, strengths and red flags</strong> — the story behind the numbers, with evidence.</li>
+          <li><strong>Tap <span class="i-demo" aria-hidden="true">i</span> next to any term</strong> — what it means, what good looks like, and what this company's number tells you.</li>
+          <li><strong>Ask about this report</strong> — anything unclear, in your own words.</li>
+        </ol>
+        <p class="muted small">New terms? <a routerLink="/reports/learn">Learn the basics</a> explains them all with everyday examples.</p>
+      </section>
+    }
+
+    @if (inFlight()) {
+      <section class="card progress-card" aria-live="polite">
+        <span class="spinner big-spinner" aria-hidden="true"></span>
+        <div>
+          <p class="progress-title">{{ r.analysisStatus === 'PENDING' ? 'Queued for analysis…' : 'Reading the report…' }}</p>
+          <p class="muted">
+            {{ r.provider === 'claude' ? 'Claude' : 'Gemini' }} is reading every page, including tables and charts.
+            Large annual reports can take 1–3 minutes. · {{ elapsed() }}
+          </p>
+        </div>
+      </section>
+    } @else if (r.analysisStatus === 'FAILED') {
+      <section class="card failed-card" role="alert">
+        <p class="progress-title">The analysis didn't finish</p>
+        <p class="muted">{{ r.errorMessage }}</p>
+      </section>
+    }
+
+    @if (a) {
+      <!-- 1. Verdict first -->
+      <section class="card health-card">
+        <div class="health-grid">
+          <div>
+            <h2 class="section-title">Financial health<app-info-tip term="healthScore" /></h2>
+            <app-score-band [score]="a.health.score" [rating]="a.health.rating" />
+            <p class="health-summary">{{ a.health.summary }}</p>
+          </div>
+          <div class="dimensions">
+            @for (d of a.health.dimensions; track d.category) {
+              <div class="dim-row">
+                <span class="dim-label">{{ d.label }}<app-info-tip [term]="d.category" /></span>
+                <span class="dim-bar"><span class="dim-fill" [class]="'dim-fill ' + d.rating.toLowerCase().replace(' ', '-')"
+                      [style.width.%]="d.score ?? 0"></span></span>
+                <span class="dim-score">{{ d.score === null ? 'n/a' : d.score }}</span>
+              </div>
+            }
+          </div>
+        </div>
+        <details class="how-it-works">
+          <summary>How this score works</summary>
+          <p>
+            The AI only reads figures from the report. Mentalist then computes each ratio with a fixed formula and rates it
+            Healthy (100), Caution (60) or Concern (20) against general rule-of-thumb ranges. Each area's score is the average
+            of its ratios. The overall score weights Profitability 25%, Liquidity 20%, Leverage 20%, Cash flow 20%, Growth 10%
+            and Efficiency 5%, over the areas that have data. Bands: Strong 75+, Stable 55–74, Watch 35–54, Weak below 35.
+            Healthy ranges differ by industry, so treat this as a starting point, not a verdict.
+          </p>
+        </details>
+      </section>
+
+      <!-- 2. Plain-language story -->
+      <section class="card">
+        <h2 class="section-title">In plain language</h2>
+        <p class="summary-text">{{ a.extraction.summary }}</p>
+        @if (a.extraction.highlights?.length) {
+          <ul class="highlights">
+            @for (h of a.extraction.highlights; track $index) {
+              <li>{{ h }}</li>
+            }
+          </ul>
+        }
+      </section>
+
+      <div class="two-col">
+        <section class="card findings strengths">
+          <h2 class="section-title"><span aria-hidden="true">✓</span> Strengths<app-info-tip term="strengths" /></h2>
+          @for (f of a.extraction.strengths ?? []; track $index) {
+            <div class="finding"><p>{{ f.point }}</p><p class="evidence">{{ f.evidence }}</p></div>
+          } @empty {
+            <p class="muted">No clear strengths identified from the report.</p>
+          }
+        </section>
+        <section class="card findings red-flags">
+          <h2 class="section-title"><span aria-hidden="true">!</span> Red flags<app-info-tip term="auditorOpinion" /></h2>
+          @for (f of a.extraction.redFlags ?? []; track $index) {
+            <div class="finding"><p>{{ f.point }}</p><p class="evidence">{{ f.evidence }}</p></div>
+          } @empty {
+            <p class="muted">No red flags stated or shown in the report.</p>
+          }
+        </section>
+      </div>
+
+      <!-- Q&A right after the story, while the numbers are fresh in mind -->
+      @if (r.chatReady) {
+        <app-report-chat [documentId]="r.id" [filename]="r.filename" [fullTextReady]="r.documentStatus === 'INDEXED'" [documentStatus]="r.documentStatus" />
+      }
+
+      <!-- 3. Charts -->
+      @if (performanceRows().length || positionRows().length) {
+        <section class="card charts-card">
+          <h2 class="section-title">The numbers at a glance</h2>
+          <div class="charts-grid">
+            @if (performanceRows().length) {
+              <app-metric-bars title="Performance" [unit]="a.extraction.unit" [rows]="performanceRows()"
+                               [currentLabel]="currentLabel()" [priorLabel]="priorLabel()" />
+            }
+            @if (positionRows().length) {
+              <app-metric-bars title="Financial position" [unit]="a.extraction.unit" [rows]="positionRows()"
+                               [currentLabel]="currentLabel()" [priorLabel]="priorLabel()" />
+            }
+          </div>
+          <app-composition-bar [metrics]="a.metrics" [unit]="a.extraction.unit" />
+        </section>
+      }
+
+      <!-- 4. Ratios, grouped -->
+      <section class="card">
+        <h2 class="section-title">Ratios<app-info-tip term="assessment" /></h2>
+        <p class="muted small">
+          Each ratio below is explained for this company in plain words. Tap <span class="i-demo" aria-hidden="true">i</span>
+          to learn what it means in general and how it affects the health score.
+        </p>
+        @for (g of ratioGroups(); track g.category) {
+          <h3 class="group-title">{{ g.label }}<app-info-tip [term]="g.category" /></h3>
+          <div class="ratio-list">
+            @for (ratio of g.ratios; track ratio.key) {
+              <div class="ratio-row" [class.na]="ratio.assessment === 'NOT_APPLICABLE'">
+                <div class="ratio-head">
+                  <span class="ratio-name">{{ ratio.name }}<app-info-tip [term]="ratio.key" [forCompany]="meaning(ratio)" /></span>
+                  <span class="ratio-value">{{ ratio.display }}</span>
+                  <span class="ratio-prior">{{ ratio.priorDisplay !== '—' ? 'prior ' + ratio.priorDisplay : '' }}</span>
+                  <app-assessment-chip [value]="ratio.assessment" />
+                </div>
+                <p class="ratio-meaning">{{ meaning(ratio) ?? ratio.explanation }}</p>
+                <details class="ratio-calc">
+                  <summary>How it's calculated</summary>
+                  <p><strong>Formula:</strong> {{ ratio.formula }}</p>
+                  <p><strong>Benchmark:</strong> {{ ratio.benchmark }}</p>
+                </details>
+              </div>
+            }
+          </div>
+        }
+      </section>
+
+      <!-- 5. Source figures -->
+      <section class="card">
+        <h2 class="section-title">Figures read from the report<app-info-tip term="annualReport" /></h2>
+        <div class="table-wrap">
+          <table class="figures">
+            <thead>
+              <tr>
+                <th scope="col">Line item</th>
+                <th scope="col" class="num">{{ currentLabel() }}</th>
+                <th scope="col" class="num">{{ priorLabel() }}</th>
+                <th scope="col" class="num">Change</th>
+                <th scope="col">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (m of a.metrics; track m.key) {
+                <tr>
+                  <th scope="row">{{ m.label }}<app-info-tip [term]="m.key" /></th>
+                  <td class="num">{{ m.currentDisplay }}</td>
+                  <td class="num">{{ m.priorDisplay }}</td>
+                  <td class="num" [class]="'num ' + changeClass(m)">
+                    @if (m.changePct !== null) {
+                      {{ m.changePct > 0 ? '▲' : m.changePct < 0 ? '▼' : '' }} {{ m.changePct | percent: '1.0-1' }}
+                    } @else { — }
+                  </td>
+                  <td class="source">{{ m.source || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      @if (a.extraction.visualInsights?.length || a.extraction.outlook) {
+        <section class="card">
+          @if (a.extraction.visualInsights?.length) {
+            <h2 class="section-title">What the report's charts show<app-info-tip term="visualInsights" /></h2>
+            <ul class="highlights">
+              @for (v of a.extraction.visualInsights; track $index) {
+                <li>{{ v }}</li>
+              }
+            </ul>
+          }
+          @if (a.extraction.outlook) {
+            <h2 class="section-title">Management outlook<app-info-tip term="outlook" /></h2>
+            <p>{{ a.extraction.outlook }}</p>
+          }
+        </section>
+      }
+
+      @if (a.extraction.dataQualityNotes?.length) {
+        <section class="card notes-card">
+          <h2 class="section-title">How the figures were read<app-info-tip term="dataQuality" /></h2>
+          <ul>
+            @for (n of a.extraction.dataQualityNotes; track $index) {
+              <li>{{ n }}</li>
+            }
+          </ul>
+        </section>
+      }
+
+      <p class="disclaimer">{{ a.disclaimer }}</p>
+      <p class="muted small">
+        Analysed with {{ a.provider === 'claude' ? 'Anthropic Claude' : 'Google Gemini' }} ({{ a.model }}) on
+        {{ a.generatedAt | date: 'medium' }}.
+      </p>
+    }
+
+    @if (detail()!.canManage) {
+      <section class="manage">
+        @if (!inFlight()) {
+          <div class="manage-group">
+            @if (configuredProviders().length > 1) {
+              <select [ngModel]="rerunProvider()" (ngModelChange)="rerunProvider.set($event)" aria-label="AI provider for re-analysis">
+                @for (p of configuredProviders(); track p.id) {
+                  <option [value]="p.id">{{ p.label }}</option>
+                }
+              </select>
+            }
+            <button type="button" class="secondary" (click)="reanalyze()" [disabled]="busy() || configuredProviders().length === 0">
+              {{ r.analysisStatus === 'FAILED' ? 'Try again' : 'Re-analyze' }}
+            </button>
+          </div>
+        }
+        <div class="manage-group">
+          @if (confirmingDelete()) {
+            <span>Delete this report and its analysis?</span>
+            <button type="button" class="danger" (click)="remove()" [disabled]="busy()">Yes, delete</button>
+            <button type="button" class="secondary" (click)="confirmingDelete.set(false)">Cancel</button>
+          } @else {
+            <button type="button" class="secondary" (click)="confirmingDelete.set(true)">Delete report</button>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>

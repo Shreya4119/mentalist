@@ -1,0 +1,121 @@
+<div class="reports-page detail">
+  <a routerLink="/reports" class="back-link">← All reports</a>
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  } @else if (!data()) {
+    <p class="muted">Comparing reports…</p>
+  } @else {
+    @let c = data()!;
+    <header class="detail-header">
+      <div>
+        <h1>
+          @if (c.sameCompany) {
+            {{ name(c.a) }}: {{ c.a.period }} vs {{ c.b.period }}
+          } @else {
+            {{ name(c.a) }} vs {{ name(c.b) }}
+          }
+        </h1>
+        <p class="subtitle">"A" is the baseline; changes read from A to B.</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="secondary" (click)="swap()">Swap A and B</button>
+      </div>
+    </header>
+
+    @for (w of c.warnings; track $index) {
+      <p class="warning-note" role="note"><span aria-hidden="true">!</span> {{ w }}</p>
+    }
+
+    <div class="two-col">
+      @for (side of [c.a, c.b]; track side.reportId; let i = $index) {
+        <section class="card">
+          <p class="side-tag">{{ i === 0 ? 'A' : 'B' }} · <a [routerLink]="['/reports', side.reportId]" [queryParams]="{ from: 'compare', a: c.a.reportId, b: c.b.reportId }">{{ sideLabel(side, c.sameCompany) }}</a></p>
+          <app-score-band [score]="side.score" [rating]="side.rating" />
+          <p class="muted small">{{ side.filename }} · {{ side.unit || side.currency || '' }}</p>
+        </section>
+      }
+    </div>
+
+    <div class="two-col">
+      <section class="card findings strengths">
+        <h2 class="section-title"><span aria-hidden="true">▲</span> What improved</h2>
+        @for (s of c.improvements; track $index) {
+          <p class="finding">{{ s }}</p>
+        } @empty {
+          <p class="muted">Nothing moved into a better band.</p>
+        }
+      </section>
+      <section class="card findings red-flags">
+        <h2 class="section-title"><span aria-hidden="true">▼</span> What got worse</h2>
+        @for (s of c.deteriorations; track $index) {
+          <p class="finding">{{ s }}</p>
+        } @empty {
+          <p class="muted">Nothing moved into a worse band.</p>
+        }
+      </section>
+    </div>
+
+    @if (chartRows().length) {
+      <section class="card charts-card">
+        <app-metric-bars title="Key figures side by side" [unit]="c.a.unit" [rows]="chartRows()"
+                         [currentLabel]="'B · ' + sideLabel(c.b, c.sameCompany)" [priorLabel]="'A · ' + sideLabel(c.a, c.sameCompany)" />
+      </section>
+    }
+
+    <section class="card">
+      <h2 class="section-title">Ratios<app-info-tip term="assessment" /></h2>
+      <div class="table-wrap">
+        <table class="figures">
+          <thead>
+            <tr>
+              <th scope="col">Ratio</th>
+              <th scope="col" class="num">A</th>
+              <th scope="col"></th>
+              <th scope="col" class="num">B</th>
+              <th scope="col"></th>
+              <th scope="col">Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of c.ratios; track r.key) {
+              <tr>
+                <th scope="row">{{ r.name }}<app-info-tip [term]="r.key" /> <span class="muted small">{{ r.category }}</span></th>
+                <td class="num">{{ r.aDisplay }}</td>
+                <td><app-assessment-chip [value]="r.aAssessment" /></td>
+                <td class="num">{{ r.bDisplay }}</td>
+                <td><app-assessment-chip [value]="r.bAssessment" /></td>
+                <td [class]="r.direction.toLowerCase()">{{ arrow(r.direction) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Figures</h2>
+      <div class="table-wrap">
+        <table class="figures">
+          <thead>
+            <tr><th scope="col">Line item</th><th scope="col" class="num">A</th><th scope="col" class="num">B</th><th scope="col" class="num">Change</th></tr>
+          </thead>
+          <tbody>
+            @for (m of c.metrics; track m.key) {
+              <tr>
+                <th scope="row">{{ m.label }}<app-info-tip [term]="m.key" /></th>
+                <td class="num">{{ m.aDisplay }}</td>
+                <td class="num">{{ m.bDisplay }}</td>
+                <td class="num">
+                  @if (m.changePct !== null) { {{ m.changePct > 0 ? '▲' : '▼' }} {{ m.changePct | percent: '1.0-1' }} } @else { — }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="disclaimer">{{ c.disclaimer }}</p>
+  }
+</div>

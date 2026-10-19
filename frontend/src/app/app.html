@@ -1,14 +1,41 @@
 @if (auth.isAuthenticated()) {
   <nav class="topbar">
-    <span class="brand">HR Knowledge Assistant</span>
+    <span class="brand">Mentalist</span>
     <div class="nav-links">
-      <a routerLink="/chat">Chat</a>
-      @if (auth.isHrAdmin()) {
-        <a routerLink="/documents">Documents</a>
-      }
+      <a routerLink="/reports" [class.active]="onReports()" [attr.aria-current]="onReports() ? 'page' : null">Financial reports</a>
+      <a routerLink="/plan" routerLinkActive="active" ariaCurrentWhenActive="page">My plan</a>
+      <a routerLink="/reports/learn" routerLinkActive="active" ariaCurrentWhenActive="page">Learn</a>
     </div>
     <div class="user">
-      <span>{{ auth.username() }} ({{ auth.role() }})</span>
+      <div class="theme-picker">
+        <button
+          type="button"
+          class="theme-toggle"
+          [style.background]="'var(--color-primary)'"
+          (click)="toggleThemePicker()"
+          title="Change color theme"
+          aria-label="Change color theme"
+          [attr.aria-expanded]="themePickerOpen()"
+        ></button>
+
+        @if (themePickerOpen()) {
+          <div class="theme-menu">
+            @for (option of themeOptions; track option.id) {
+              <button
+                type="button"
+                class="theme-option"
+                [class.active]="themeService.theme() === option.id"
+                (click)="selectTheme(option.id)"
+              >
+                <span class="swatch" [style.background]="option.swatch"></span>
+                {{ option.name }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <span class="user-name">{{ auth.username() }} ({{ auth.role() }})</span>
       <button type="button" (click)="logout()">Log out</button>
     </div>
   </nav>

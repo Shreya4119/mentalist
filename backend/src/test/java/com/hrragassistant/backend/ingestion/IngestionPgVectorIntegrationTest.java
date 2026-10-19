@@ -63,34 +63,34 @@ class IngestionPgVectorIntegrationTest {
     DocumentIngestionService ingestionService;
 
     @Autowired
-    HrDocumentRepository documentRepository;
+    StoredDocumentRepository documentRepository;
 
     @Autowired
     VectorStore vectorStore;
 
     @Test
     void ingestsDocumentAndMakesItRetrievableViaSimilaritySearch() throws Exception {
-        String policyText = "Leave and Vacation Policy - Carryover Rules\n\n"
-                + "Full-time employees accrue 20 vacation days per calendar year. Employees may "
-                + "carry over a maximum of 5 unused vacation days into the following year.";
+        String reportText = "Northwind Traders - Annual Report FY2025-26, Liquidity\n\n"
+                + "Current assets were EUR 480 million against current liabilities of EUR 300 million, "
+                + "giving a current ratio of 1.6 at the balance-sheet date.";
 
         MockMultipartFile file = new MockMultipartFile(
-                "file", "leave-policy.txt", "text/plain", policyText.getBytes());
+                "file", "northwind-fy26.txt", "text/plain", reportText.getBytes());
 
-        HrDocument queued = ingestionService.enqueue(file);
+        StoredDocument queued = ingestionService.enqueue(file, DocumentKind.FINANCIAL_REPORT);
         assertThat(queued.getStatus()).isEqualTo(DocumentStatus.QUEUED);
 
         ingestionService.processQueuedDocument(queued.getId());
 
-        HrDocument indexed = documentRepository.findById(queued.getId()).orElseThrow();
+        StoredDocument indexed = documentRepository.findById(queued.getId()).orElseThrow();
         assertThat(indexed.getStatus()).isEqualTo(DocumentStatus.INDEXED);
         assertThat(indexed.getChunkCount()).isEqualTo(1);
 
         List<Document> results = vectorStore.similaritySearch(
-                SearchRequest.builder().query("How many vacation days carry over?").topK(1).build());
+                SearchRequest.builder().query("What is the current ratio?").topK(1).build());
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getMetadata().get("document_id")).isEqualTo(queued.getId().toString());
-        assertThat(results.get(0).getText()).contains("5 unused vacation days");
+        assertThat(results.get(0).getText()).contains("current ratio of 1.6");
     }
 }

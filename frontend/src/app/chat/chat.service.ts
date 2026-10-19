@@ -35,8 +35,8 @@ export type FeedbackRating = 'UP' | 'DOWN';
 export class ChatService {
   private readonly http = inject(HttpClient);
 
-  ask(question: string, conversationId: string | null): Observable<AskResponse> {
-    return this.http.post<AskResponse>('/api/chat', { question, conversationId });
+  ask(question: string, conversationId: string | null, documentId: string): Observable<AskResponse> {
+    return this.http.post<AskResponse>('/api/chat', { question, conversationId, documentId });
   }
 
   getHistory(conversationId: string): Observable<ConversationHistory> {
