@@ -1,0 +1,18 @@
+# HTTPS for the public demo. Caddy fetches and renews a free Let's Encrypt
+# certificate for {$DOMAIN} automatically (ports 80 and 443 must be open).
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Caddy replaces any X-Forwarded-For sent by the visitor with their real
+	# address, which the backend uses for rate limiting.
+	reverse_proxy frontend:80
+}

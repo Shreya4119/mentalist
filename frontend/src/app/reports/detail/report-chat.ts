@@ -1,3 +1,4 @@
+import { HostingService, plural, serverMessage } from '../../core/hosting.service';
 import { Component, ElementRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -39,6 +40,9 @@ interface QaMessage {
           The full report text is still being indexed, so answers use the analysis for now and get more detailed once indexing finishes.
         }
       </p>
+      @if (questionsLeftText()) {
+        <p class="muted small" data-testid="questions-left">{{ questionsLeftText() }}</p>
+      }
 
       @if (messages().length === 0) {
         <div class="suggestions" role="group" aria-label="Suggested questions">
@@ -97,6 +101,11 @@ export class ReportChat {
   readonly sending = signal(false);
   readonly error = signal<string | null>(null);
   readonly canSend = computed(() => !this.sending() && this.question().trim().length > 0);
+  protected readonly hosting = inject(HostingService);
+  readonly questionsLeftText = computed(() => {
+    const l = this.hosting.limits();
+    return l && l.questionsPerDay > 0 ? `${plural(l.questionsLeft, 'question', 'questions')} left today` : '';
+  });
 
   protected readonly suggestions = [
     'Explain the health score in simple terms',
@@ -132,6 +141,7 @@ export class ReportChat {
     this.sending.set(true);
     this.chat.ask(q, this.conversationId, this.documentId()).subscribe({
       next: (r) => {
+        this.hosting.refreshLimits();
         this.conversationId = r.conversationId;
         this.messages.update((m) => [...m, { id: r.messageId, role: 'ASSISTANT', content: r.answer, citations: r.citations }]);
         this.sending.set(false);
@@ -139,7 +149,9 @@ export class ReportChat {
       error: (err) => {
         this.sending.set(false);
         this.error.set(
-          err.status === 409
+          err.status === 429 || err.status === 403
+            ? (serverMessage(err) ?? 'You’ve reached today’s question limit. It resets at midnight (Amsterdam time).')
+            : err.status === 409
             ? 'This report isn’t ready for questions yet. Try again once the analysis finishes.'
             : err.status === 404
               ? 'This report no longer exists.'

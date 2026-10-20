@@ -1,0 +1,21 @@
+.about-page { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 3rem; display: grid; gap: 1.1rem; }
+h1 { margin: 0 0 0.35rem; font-size: 1.75rem; }
+.subtitle { margin: 0; color: var(--color-text-muted); max-width: 65ch; }
+.back-link { color: var(--color-text-muted); text-decoration: none; font-weight: 600; font-size: 0.9rem; justify-self: start; }
+.back-link:hover { color: var(--color-primary); }
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; padding: 1.1rem 1.25rem; }
+.card h2 { margin: 0 0 0.6rem; font-size: 1.1rem; }
+.card ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.5rem; line-height: 1.55; }
+.card p { margin: 0; line-height: 1.55; }
+.card a { color: var(--color-primary-hover); font-weight: 600; }
+.muted-note { margin-top: 0.6rem !important; font-size: 0.85rem; color: var(--color-text-muted); }
+.danger-zone { border-color: var(--color-danger); display: grid; gap: 0.75rem; }
+.danger-zone h2 { margin: 0; }
+button { font: inherit; font-weight: 700; padding: 0.55rem 1rem; border-radius: 999px; cursor: pointer; justify-self: start; }
+button.danger { background: var(--color-danger); border: 1px solid var(--color-danger); color: #fff; }
+button.danger:disabled { opacity: 0.45; cursor: not-allowed; }
+button.plain { background: var(--color-surface); border: 1px solid var(--color-border-strong); color: var(--color-text); }
+.actions { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+label.confirm { display: grid; gap: 0.35rem; font-size: 0.9rem; }
+label.confirm input { font: inherit; padding: 0.55rem 0.8rem; border-radius: 10px; border: 1px solid var(--color-border-strong); background: var(--color-surface-alt); color: var(--color-text); max-width: 320px; }
+.error { color: var(--color-danger); margin: 0; }

@@ -27,8 +27,13 @@ public class JwtService {
     }
 
     public String issueToken(String username, Role role) {
+        return issueToken(username, role, expirationMillis);
+    }
+
+    /** A token with its own lifetime, e.g. a short public-demo guest session. */
+    public String issueToken(String username, Role role, long ttlMillis) {
         Date now = new Date();
-        Date expiry = new Date(now.getTime() + expirationMillis);
+        Date expiry = new Date(now.getTime() + ttlMillis);
 
         return Jwts.builder()
                 .subject(username)

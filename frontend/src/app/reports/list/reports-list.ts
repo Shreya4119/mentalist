@@ -4,6 +4,8 @@ import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, vie
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription, interval } from 'rxjs';
+import { AuthService } from '../../auth/auth.service';
+import { HostingService, plural } from '../../core/hosting.service';
 import { ProviderInfo, ReportSummary, ReportsService, isInFlight } from '../reports.service';
 import { ACCEPT, MAX_UPLOAD_MB, checkUpload, mb } from '../upload-rules';
 
@@ -16,6 +18,15 @@ import { ACCEPT, MAX_UPLOAD_MB, checkUpload, mb } from '../upload-rules';
 export class ReportsList implements OnInit, OnDestroy {
   private readonly reports = inject(ReportsService);
   private readonly router = inject(Router);
+  protected readonly hosting = inject(HostingService);
+  protected readonly auth = inject(AuthService);
+  readonly analysesLeftText = computed(() => {
+    const l = this.hosting.limits();
+    if (!l || l.analysesPerDay <= 0) return '';
+    return l.analysesLeft > 0
+      ? `${plural(l.analysesLeft, 'report analysis', 'report analyses')} left today (of ${l.analysesPerDay}).`
+      : `You’ve used today’s ${l.analysesPerDay} report analyses. Your allowance resets at midnight (Amsterdam time).`;
+  });
 
   readonly items = signal<ReportSummary[]>([]);
   readonly loading = signal(true);
@@ -134,6 +145,7 @@ export class ReportsList implements OnInit, OnDestroy {
   }
 
   private finishUpload(): void {
+    this.hosting.refreshLimits();
     this.uploading.set(false);
     this.progress.set(null);
     this.resetInput();
@@ -146,6 +158,9 @@ export class ReportsList implements OnInit, OnDestroy {
         return "Couldn't reach the server. Check that the backend is running, then try again.";
       case 413:
         return server ?? `That upload is larger than ${MAX_UPLOAD_MB} MB. Upload just the financial statements pages, or compress the PDF.`;
+      case 403:
+      case 429:
+        return server ?? 'Uploading is not available right now.';
       case 400:
       case 415:
         return server ?? 'That file type is not supported.';

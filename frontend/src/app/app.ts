@@ -1,8 +1,9 @@
-import { Component, ElementRef, HostListener, inject, signal } from '@angular/core';
+import { Component, ElementRef, HostListener, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from './auth/auth.service';
+import { HostingService } from './core/hosting.service';
 import { THEME_OPTIONS, Theme, ThemeService } from './theme/theme.service';
 
 @Component({
@@ -14,6 +15,7 @@ import { THEME_OPTIONS, Theme, ThemeService } from './theme/theme.service';
 export class App {
   protected readonly auth = inject(AuthService);
   protected readonly themeService = inject(ThemeService);
+  protected readonly hosting = inject(HostingService);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
 
@@ -27,6 +29,18 @@ export class App {
     ),
     { initialValue: this.router.url },
   );
+
+  constructor() {
+    this.hosting.loadConfig();
+    // Today's AI allowance depends on who is signed in.
+    effect(() => {
+      if (this.auth.isAuthenticated()) {
+        this.hosting.refreshLimits();
+      } else {
+        this.hosting.clearLimits();
+      }
+    });
+  }
 
   /** "Financial reports" is active on /reports/** except the Learn page, which has its own tab. */
   protected onReports(): boolean {

@@ -47,7 +47,10 @@
     @if (uploadError()) {
       <p class="error" role="alert">{{ uploadError() }}</p>
     }
-    <p class="privacy-note">Use public reports. AI providers' free tiers may use uploaded content to improve their models.</p>
+    @if (hosting.analysesLimited()) {
+      <p class="allowance" data-testid="analyses-left">{{ analysesLeftText() }}</p>
+    }
+    <p class="privacy-note">Your uploads are private to you. Use public annual reports: pages are sent to the AI provider for analysis.</p>
   </section>
 
   <section class="library">
@@ -71,7 +74,9 @@
         @for (r of items(); track r.id) {
           <li class="report-row" [class.selected]="selected().includes(r.id)">
             <a class="report-link" [routerLink]="['/reports', r.id]">
-              <span class="report-name">{{ r.companyName ?? r.filename }}</span>
+              <span class="report-name">{{ r.companyName ?? r.filename }}
+                @if (r.shared && !auth.isAdmin()) { <span class="sample-tag">Sample</span> }
+              </span>
               <span class="report-meta">
                 @if (r.companyName) { {{ r.filename }} · }
                 @if (r.reportingPeriod) { {{ r.reportingPeriod }} · }

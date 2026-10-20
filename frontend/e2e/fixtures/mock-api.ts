@@ -90,6 +90,17 @@ export class MockApi {
     }
     return this.json(route, 404, { message: `No mock for ${method} ${path}` });
   }
+  /** Public server settings (GET /api/auth/config). */
+  publicMode = false;
+  signupEnabled = false;
+  /** Accounts created through sign-up: username → password. */
+  signedUp = new Map<string, string>();
+  /** Accounts deleted via DELETE /api/account. */
+  deletedAccounts: string[] = [];
+  /** Today's allowance (GET /api/limits); -1 = unlimited. analysesLeft 0 makes uploads answer 429. */
+  limits = { analysesLeft: -1, analysesPerDay: -1, questionsLeft: -1, questionsPerDay: -1 };
+  /** When set, the next chat question is answered with this status and message (e.g. a 429 daily limit). */
+  nextChatError: { status: number; message: string } | null = null;
   /** Optional artificial latency for /api/chat (ms). */
   chatDelayMs = 0;
 
@@ -114,7 +125,7 @@ export class MockApi {
   private reportPolls = new Map<string, number>();
 
   /** Seeds an analysed report (fy26 = strong FY 2025-26 analysis, fy25 = prior year). */
-  addReport(filename: string, which: 'fy26' | 'fy25' = 'fy26', uploadedBy: Username = 'admin'): MockReport {
+  addReport(filename: string, which: 'fy26' | 'fy25' = 'fy26', uploadedBy: string = 'admin'): MockReport {
     const r: MockReport = {
       id: uuid(), filename, uploadedAt: which === 'fy26' ? '2026-09-30T09:00:00Z' : '2025-09-30T09:00:00Z',
       uploadedBy, analysisStatus: 'COMPLETED', provider: 'gemini',
@@ -127,7 +138,7 @@ export class MockApi {
   private reportSummary(r: MockReport) {
     const a = r.analysis;
     return {
-      id: r.id, filename: r.filename, uploadedAt: r.uploadedAt, uploadedBy: r.uploadedBy,
+      id: r.id, filename: r.filename, uploadedAt: r.uploadedAt, uploadedBy: r.uploadedBy, shared: r.uploadedBy === 'admin',
       documentStatus: r.textFailed ? 'FAILED' : r.fullTextIndexed ? 'INDEXED' : 'PROCESSING',
       chatReady: r.fullTextIndexed || r.analysisStatus === 'COMPLETED',
       analysisStatus: r.analysisStatus, provider: r.provider, model: r.provider === 'claude' ? 'claude-sonnet-5-5' : 'gemini-3.8-flash',
@@ -159,6 +170,11 @@ export class MockApi {
     r.fullTextIndexed = true;
   }
 
+  /** Own reports plus the admin's shared samples; admins see all. */
+  private visible(r: MockReport, admin: boolean, username: string): boolean {
+    return admin || r.uploadedBy === username || r.uploadedBy === 'admin';
+  }
+
   private async handleReports(route: Route, role: Role, username: string, path: string, method: string, url: URL) {
     const admin = role === 'ADMIN';
     const parts = path.split('/'); // ['', 'api', 'reports', id?, 'analysis'?]
@@ -166,7 +182,11 @@ export class MockApi {
     if (path === '/api/reports/providers') return this.json(route, 200, this.providerList);
     if (path === '/api/reports' && method === 'GET') {
       this.reports.forEach((r) => this.tick(r));
-      return this.json(route, 200, [...this.reports].sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)).map((r) => this.reportSummary(r)));
+      return this.json(route, 200, [...this.reports].filter((r) => this.visible(r, admin, username))
+        .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt)).map((r) => this.reportSummary(r)));
+    }
+    if (path === '/api/reports' && method === 'POST' && this.limits.analysesLeft === 0) {
+      return this.json(route, 429, { message: `You've used your ${this.limits.analysesPerDay} report analyses for today. Your allowance resets at midnight (Amsterdam time).` });
     }
     if (path === '/api/reports' && method === 'POST') {
       const body = route.request().postDataBuffer()?.toString('latin1') ?? '';
@@ -200,13 +220,13 @@ export class MockApi {
     if (id === 'compare') {
       const a = this.reports.find((r) => r.id === url.searchParams.get('a'));
       const b = this.reports.find((r) => r.id === url.searchParams.get('b'));
-      if (!a || !b) return this.json(route, 404, { message: 'Report not found' });
+      if (!a || !b || !this.visible(a, admin, username) || !this.visible(b, admin, username)) return this.json(route, 404, { message: 'Report not found' });
       if (a.analysisStatus !== 'COMPLETED' || b.analysisStatus !== 'COMPLETED') return this.json(route, 409, { message: 'not finished analysis yet' });
       const c = JSON.parse(JSON.stringify(COMPARISON));
       c.a.reportId = a.id; c.a.filename = a.filename; c.b.reportId = b.id; c.b.filename = b.filename;
       return this.json(route, 200, c);
     }
-    const r = this.reports.find((x) => x.id === id);
+    const r = this.reports.find((x) => x.id === id && this.visible(x, admin, username));
     if (!r) return this.json(route, 404, { message: 'Report not found' });
     const canManage = admin || r.uploadedBy === username;
     if (parts.length === 4 && method === 'GET') {
@@ -260,8 +280,14 @@ export class MockApi {
 
   private role(route: Route): Role | null {
     const auth = route.request().headers()['authorization'] ?? '';
-    const m = /^Bearer mock-(ADMIN|USER)$/.exec(auth);
+    const m = /^Bearer mock-(ADMIN|USER)(-[a-z0-9._-]+)?$/.exec(auth);
     return (m?.[1] as Role) ?? null;
+  }
+
+  /** Signed-up users carry their name in the mock token; the seeded ones are admin and demo. */
+  private userOf(route: Route, role: Role): string {
+    const m = /^Bearer mock-(?:ADMIN|USER)-([a-z0-9._-]+)$/.exec(route.request().headers()['authorization'] ?? '');
+    return m ? m[1] : role === 'ADMIN' ? 'admin' : 'demo';
   }
 
   private async handle(route: Route) {
@@ -274,18 +300,51 @@ export class MockApi {
       const forced = this.take('login');
       if (forced) return this.json(route, forced, { message: 'error' });
       const { username, password } = req.postDataJSON() ?? {};
+      const signedUpPassword = this.signedUp.get(String(username).toLowerCase());
+      if (signedUpPassword !== undefined) {
+        if (signedUpPassword !== password) return this.json(route, 401, { message: 'Invalid username or password' });
+        const name = String(username).toLowerCase();
+        return this.json(route, 200, { token: `mock-USER-${name}`, role: 'USER', username: name });
+      }
       const user = USERS[username as Username];
       if (!user || user.password !== password) return this.json(route, 401, { message: 'Invalid username or password' });
       return this.json(route, 200, { token: `mock-${user.role}`, role: user.role });
     }
 
+    if (path === '/api/auth/config' && method === 'GET') {
+      return this.json(route, 200, { publicMode: this.publicMode, signupEnabled: this.signupEnabled, minPasswordLength: 10 });
+    }
+    if (path === '/api/auth/signup' && method === 'POST') {
+      if (!this.signupEnabled) return this.json(route, 404, { message: 'Sign-up is not enabled on this server' });
+      const { username, password, acceptedTerms } = req.postDataJSON() ?? {};
+      const name = String(username ?? '').trim().toLowerCase();
+      if (!acceptedTerms) return this.json(route, 400, { message: 'Please confirm that you have read how Mentalist works.' });
+      if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(name)) return this.json(route, 400, { message: 'Choose a username of 3–30 characters.' });
+      if (name === 'admin' || name === 'demo' || this.signedUp.has(name)) return this.json(route, 409, { message: 'That username is taken. Please choose another.' });
+      if (String(password ?? '').length < 10) return this.json(route, 400, { message: 'Use a password of at least 10 characters.' });
+      if (String(password).toLowerCase().includes(name)) return this.json(route, 400, { message: 'That password is too easy to guess. Try a short sentence or a mix of words and numbers.' });
+      this.signedUp.set(name, password);
+      return this.json(route, 201, { token: `mock-USER-${name}`, role: 'USER', username: name });
+    }
+
     const role = this.role(route);
     if (!role) return this.json(route, 401);
+    const username = this.userOf(route, role);
+    if (path === '/api/limits' && method === 'GET') {
+      return this.json(route, 200, role === 'ADMIN' ? { analysesLeft: -1, analysesPerDay: -1, questionsLeft: -1, questionsPerDay: -1 } : this.limits);
+    }
+    if (path === '/api/account' && method === 'DELETE') {
+      if (role === 'ADMIN') return this.json(route, 403, { message: "The admin account can't be deleted from the app." });
+      this.reports = this.reports.filter((r) => r.uploadedBy !== username);
+      this.signedUp.delete(username);
+      this.deletedAccounts.push(username);
+      return route.fulfill({ status: 204 });
+    }
     if (path.startsWith('/api/planning/health-check')) {
-      return this.handlePlanning(route, role === 'ADMIN' ? 'admin' : 'demo', path, method);
+      return this.handlePlanning(route, username as Username, path, method);
     }
     if (path.startsWith('/api/reports')) {
-      return this.handleReports(route, role, role === 'ADMIN' ? 'admin' : 'demo', path, method, url);
+      return this.handleReports(route, role, username, path, method, url);
     }
 
     if (path === '/api/chat' && method === 'POST') {
@@ -300,6 +359,11 @@ export class MockApi {
       const target = this.reports.find((x) => x.id === call.documentId);
       if (!target) return this.json(route, 404, { message: 'Report not found' });
       if (!target.fullTextIndexed && target.analysisStatus !== 'COMPLETED') return this.json(route, 409, { message: 'Report is not ready for questions yet' });
+      if (this.nextChatError) {
+        const e = this.nextChatError;
+        this.nextChatError = null;
+        return this.json(route, e.status, { message: e.message });
+      }
       if (this.chatDelayMs) await new Promise((r) => setTimeout(r, this.chatDelayMs));
       const f = this.take('chat');
       if (f) return this.json(route, f, { message: 'error' });

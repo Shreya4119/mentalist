@@ -54,6 +54,8 @@ public class ReportService {
     private final ReportAnalyzers analyzers;
     private final ReportFileStore fileStore;
     private final long maxUploadBytes;
+    private final ReportAccess access;
+    private final com.hrragassistant.backend.hosting.UsageLimits limits;
 
     public ReportService(StoredDocumentRepository documentRepository,
                          FinancialReportAnalysisRepository analysisRepository,
@@ -61,6 +63,8 @@ public class ReportService {
                          ReportAnalysisWorker worker,
                          ReportAnalyzers analyzers,
                          ReportFileStore fileStore,
+                         ReportAccess access,
+                         com.hrragassistant.backend.hosting.UsageLimits limits,
                          @org.springframework.beans.factory.annotation.Value("${app.reports.max-upload-mb:250}") long maxUploadMb) {
         this.documentRepository = documentRepository;
         this.analysisRepository = analysisRepository;
@@ -69,6 +73,8 @@ public class ReportService {
         this.analyzers = analyzers;
         this.fileStore = fileStore;
         this.maxUploadBytes = maxUploadMb * 1024 * 1024;
+        this.access = access;
+        this.limits = limits;
     }
 
     /** The same file was uploaded before; the UI opens the existing report instead. */
@@ -94,7 +100,8 @@ public class ReportService {
                                 DocumentStatus documentStatus, boolean chatReady,
                                 ReportAnalysisStatus analysisStatus, String provider, String model,
                                 String companyName, String reportingPeriod, Integer healthScore, String healthRating,
-                                String errorMessage, Instant analysisRequestedAt, Instant analysisCompletedAt) {
+                                String errorMessage, Instant analysisRequestedAt, Instant analysisCompletedAt,
+                                boolean shared) {
     }
 
     public record ReportDetail(ReportSummary report, ReportAnalysisView analysis, boolean canManage) {
@@ -109,23 +116,30 @@ public class ReportService {
                 .toList();
     }
 
-    public List<ReportSummary> list() {
+    /** The person's own reports plus the shared sample reports (admins see all). */
+    public List<ReportSummary> list(String username, boolean admin) {
         // Projection: file bytes of old rows are never loaded just to show the list.
         List<StoredDocumentSummary> docs = documentRepository.findSummariesByKindOrderByUploadedAtDesc(DocumentKind.FINANCIAL_REPORT);
         Map<UUID, FinancialReportAnalysis> analyses = analysisRepository
                 .findByDocumentIdIn(docs.stream().map(StoredDocumentSummary::getId).toList()).stream()
                 .collect(Collectors.toMap(FinancialReportAnalysis::getDocumentId, Function.identity()));
+        Set<String> shared = access.sharedOwners();
         return docs.stream()
+                .filter(d -> ReportAccess.canView(analyses.get(d.getId()), username, admin, shared))
                 .map(d -> summary(d.getId(), d.getFilename(), d.getUploadedAt(), d.getStatus(),
-                        analyses.get(d.getId()), view(analyses.get(d.getId()))))
+                        analyses.get(d.getId()), view(analyses.get(d.getId())), ReportAccess.isShared(analyses.get(d.getId()), shared)))
                 .toList();
     }
 
     public ReportDetail get(UUID id, String username, boolean admin) {
         StoredDocument doc = report(id);
         FinancialReportAnalysis analysis = analysisRepository.findByDocumentId(id).orElse(null);
+        Set<String> shared = access.sharedOwners();
+        if (!ReportAccess.canView(analysis, username, admin, shared)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Report not found: " + id);
+        }
         ReportAnalysisView view = view(analysis);
-        return new ReportDetail(summary(doc, analysis, view), view, canManage(analysis, username, admin));
+        return new ReportDetail(summary(doc, analysis, view, ReportAccess.isShared(analysis, shared)), view, canManage(analysis, username, admin));
     }
 
     // ------------------------------------------------------------------ commands
@@ -136,7 +150,7 @@ public class ReportService {
      * are streamed to disk, and a file uploaded before opens the existing
      * analysis instead of being analysed twice.
      */
-    public ReportSummary upload(List<MultipartFile> files, String provider, String username) throws IOException {
+    public ReportSummary upload(List<MultipartFile> files, String provider, String username, boolean admin) throws IOException {
         List<MultipartFile> parts = files == null ? List.of() : files.stream().filter(f -> f != null && !f.isEmpty()).toList();
         if (parts.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The uploaded file is empty");
@@ -184,17 +198,28 @@ public class ReportService {
             }
         }
 
-        var existing = documentRepository.findFirstBySha256AndKind(stored.sha256(), DocumentKind.FINANCIAL_REPORT);
+        // Only reports this person can see count as duplicates: someone else's private
+        // copy of the same file must not be revealed (or opened) through an upload.
+        Set<String> shared = access.sharedOwners();
+        var existing = documentRepository.findBySha256AndKind(stored.sha256(), DocumentKind.FINANCIAL_REPORT).stream()
+                .filter(d -> ReportAccess.canView(analysisRepository.findByDocumentId(d.getId()).orElse(null), username, admin, shared))
+                .findFirst();
         if (existing.isPresent()) {
             fileStore.delete(stored.relativePath());
             throw new DuplicateReport(existing.get().getId(), existing.get().getFilename());
+        }
+        try {
+            limits.acquireAnalysis(username, admin);
+        } catch (RuntimeException e) {
+            fileStore.delete(stored.relativePath());
+            throw e;
         }
 
         StoredDocument doc = ingestionService.enqueueStored(filename, stored, mediaType, DocumentKind.FINANCIAL_REPORT);
         FinancialReportAnalysis analysis = analysisRepository.save(
                 new FinancialReportAnalysis(doc.getId(), username, analyzer.id(), analyzer.model()));
         worker.run(analysis.getId());
-        return summary(doc, analysis, null);
+        return summary(doc, analysis, null, admin);
     }
 
     /** Validates one part by name and contents; returns what it really is. */
@@ -243,10 +268,11 @@ public class ReportService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This report is already being analysed");
         }
         ReportAnalyzer analyzer = resolveProvider(provider);
+        limits.acquireAnalysis(username, admin);
         analysis.requeue(analyzer.id(), analyzer.model());
         analysisRepository.save(analysis);
         worker.run(analysis.getId());
-        return summary(doc, analysis, null);
+        return summary(doc, analysis, null, ReportAccess.isShared(analysis, access.sharedOwners()));
     }
 
     public void delete(UUID id, String username, boolean admin) {
@@ -259,12 +285,14 @@ public class ReportService {
         ingestionService.delete(id);
     }
 
-    public ReportComparator.Comparison compare(UUID a, UUID b) {
+    public ReportComparator.Comparison compare(UUID a, UUID b, String username, boolean admin) {
         if (a.equals(b)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Pick two different reports to compare");
         }
         StoredDocument docA = report(a);
         StoredDocument docB = report(b);
+        access.requireView(a, username, admin);
+        access.requireView(b, username, admin);
         ReportAnalysisView viewA = completedView(a, docA);
         ReportAnalysisView viewB = completedView(b, docB);
         return ReportComparator.compare(a.toString(), docA.getFilename(), viewA, b.toString(), docB.getFilename(), viewB);
@@ -315,12 +343,12 @@ public class ReportService {
         }
     }
 
-    private static ReportSummary summary(StoredDocument d, FinancialReportAnalysis a, ReportAnalysisView v) {
-        return summary(d.getId(), d.getFilename(), d.getUploadedAt(), d.getStatus(), a, v);
+    private static ReportSummary summary(StoredDocument d, FinancialReportAnalysis a, ReportAnalysisView v, boolean shared) {
+        return summary(d.getId(), d.getFilename(), d.getUploadedAt(), d.getStatus(), a, v, shared);
     }
 
     private static ReportSummary summary(UUID id, String filename, Instant uploadedAt, DocumentStatus status,
-                                         FinancialReportAnalysis a, ReportAnalysisView v) {
+                                         FinancialReportAnalysis a, ReportAnalysisView v, boolean shared) {
         return new ReportSummary(id, filename, uploadedAt,
                 a == null ? null : a.getUploadedBy(),
                 status,
@@ -333,6 +361,7 @@ public class ReportService {
                 v == null ? null : v.health().rating(),
                 a == null ? null : a.getErrorMessage(),
                 a == null ? null : a.getRequestedAt(),
-                a == null ? null : a.getCompletedAt());
+                a == null ? null : a.getCompletedAt(),
+                shared);
     }
 }

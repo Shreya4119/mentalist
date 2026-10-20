@@ -1,0 +1,49 @@
+<div class="about-page">
+  <a routerLink="/reports" class="back-link">← Financial reports</a>
+
+  <header>
+    <h1>Your account</h1>
+    <p class="subtitle">Signed in as <strong>{{ auth.username() }}</strong>.</p>
+  </header>
+
+  @let l = hosting.limits();
+  @if (l && (l.analysesPerDay > 0 || l.questionsPerDay > 0)) {
+    <section class="card" aria-label="Today's allowance">
+      <h2>Today’s allowance</h2>
+      <ul>
+        @if (l.analysesPerDay > 0) {
+          <li data-testid="analyses-left">{{ plural(l.analysesLeft, 'report analysis', 'report analyses') }} left of {{ l.analysesPerDay }}</li>
+        }
+        @if (l.questionsPerDay > 0) {
+          <li data-testid="questions-left">{{ plural(l.questionsLeft, 'question', 'questions') }} left of {{ l.questionsPerDay }}</li>
+        }
+      </ul>
+      <p class="muted-note">Your allowance resets every night at midnight (Amsterdam time). It keeps AI costs fair for everyone.</p>
+    </section>
+  }
+
+  @if (!auth.isAdmin()) {
+    <section class="card danger-zone" aria-label="Delete account">
+      <h2>Delete your account</h2>
+      <p>This permanently deletes your account, every report you uploaded (files and analyses) and your saved health checks. It can’t be undone.</p>
+      @if (!confirming()) {
+        <button type="button" class="danger" (click)="confirming.set(true)">Delete my account…</button>
+      } @else {
+        <label class="confirm">
+          Type your username <strong>{{ auth.username() }}</strong> to confirm
+          <input type="text" name="confirmName" [ngModel]="typed()" (ngModelChange)="typed.set($event)" autocomplete="off" />
+        </label>
+        <div class="actions">
+          <button type="button" class="danger" (click)="deleteAccount()"
+                  [disabled]="busy() || typed().trim().toLowerCase() !== (auth.username() ?? '').toLowerCase()">
+            {{ busy() ? 'Deleting…' : 'Delete everything' }}
+          </button>
+          <button type="button" class="plain" (click)="confirming.set(false); typed.set('')">Cancel</button>
+        </div>
+      }
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+    </section>
+  }
+</div>

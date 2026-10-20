@@ -75,6 +75,29 @@ app:
       queue-name: ${AWS_SQS_QUEUE_NAME:document-ingestion}
   observability:
     cost-per-1k-tokens-usd: ${COST_PER_1K_TOKENS_USD:0.003}
+  # Public server (deploy/PUBLIC_SERVER.md). All off locally: no sign-up page,
+  # no daily caps. On the public server people create accounts, each sees only
+  # their own reports plus the admin's shared sample reports, and AI calls are
+  # capped per person and for the whole site each day (0 = unlimited).
+  hosting:
+    public-mode: ${PUBLIC_MODE:false}
+    signup-enabled: ${SIGNUP_ENABLED:false}
+    max-users: ${MAX_USERS:1000}
+    signups-per-hour: ${SIGNUPS_PER_IP_PER_HOUR:5}
+  limits:
+    analyses-per-user-per-day: ${LIMIT_ANALYSES_PER_USER_PER_DAY:0}
+    analyses-per-day: ${LIMIT_ANALYSES_PER_DAY:0}
+    questions-per-user-per-day: ${LIMIT_QUESTIONS_PER_USER_PER_DAY:0}
+    questions-per-day: ${LIMIT_QUESTIONS_PER_DAY:0}
+    zone: ${LIMIT_ZONE:Europe/Amsterdam}
+  seed:
+    admin-password: ${ADMIN_PASSWORD:admin-pass}
+    demo-password: ${DEMO_PASSWORD:demo-pass}
+  security:
+    # Only behind the public deployment's proxies, which set X-Forwarded-For.
+    trust-forwarded-for: ${TRUST_FORWARDED_FOR:false}
+    max-failed-logins: ${MAX_FAILED_LOGINS:10}
+    failed-login-window-minutes: 15
   # Uploaded report files live here, not in Postgres (relative to where the backend starts).
   storage:
     dir: ${STORAGE_DIR:./data/uploads}

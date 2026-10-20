@@ -1,39 +1,79 @@
 <div class="login-page">
-  <form class="login-card" (ngSubmit)="submit()">
+  <div class="login-card">
     <h1>Mentalist</h1>
-    <p class="subtitle">Your AI mentor for reading company reports and learning to invest. Sign in to analyse a report.</p>
+    <p class="subtitle">Your AI mentor for reading company reports and learning to invest.</p>
 
-    <label>
-      Username
-      <input
-        type="text"
-        name="username"
-        [ngModel]="username()"
-        (ngModelChange)="username.set($event)"
-        required
-        autofocus
-      />
-    </label>
-
-    <label>
-      Password
-      <input
-        type="password"
-        name="password"
-        [ngModel]="password()"
-        (ngModelChange)="password.set($event)"
-        required
-      />
-    </label>
-
-    @if (error()) {
-      <p class="error">{{ error() }}</p>
+    @if (accountDeleted()) {
+      <p class="notice" role="status">Your account and all its data have been deleted.</p>
+    }
+    @if (sessionEnded()) {
+      <p class="notice" role="status">Your session ended. Please sign in again.</p>
     }
 
-    <button type="submit" [disabled]="loading() || !username().trim() || !password()">
-      {{ loading() ? 'Signing in…' : 'Sign in' }}
-    </button>
+    @if (hosting.signupEnabled()) {
+      <div class="mode-switch" role="group" aria-label="Sign in or create an account">
+        <button type="button" [class.on]="mode() === 'signin'" [attr.aria-pressed]="mode() === 'signin'" (click)="setMode('signin')">Sign in</button>
+        <button type="button" [class.on]="mode() === 'signup'" [attr.aria-pressed]="mode() === 'signup'" (click)="setMode('signup')">Create account</button>
+      </div>
+    }
 
-    <p class="hint">Demo accounts: <code>admin / admin-pass</code> · <code>demo / demo-pass</code></p>
-  </form>
+    @if (mode() === 'signup' && hosting.signupEnabled()) {
+      <form class="sign-in" (ngSubmit)="createAccount()" aria-label="Create account">
+        <label>
+          Choose a username
+          <input type="text" name="newUsername" autocomplete="username" [ngModel]="username()" (ngModelChange)="username.set($event)"
+                 required #signupName />
+        </label>
+        <label>
+          Password
+          <input type="password" name="newPassword" autocomplete="new-password" [ngModel]="password()"
+                 (ngModelChange)="password.set($event)" required aria-describedby="pw-hint" />
+        </label>
+        <p id="pw-hint" class="field-hint">At least {{ minPassword() }} characters. A short sentence works well.</p>
+        <label>
+          Repeat password
+          <input type="password" name="confirmPassword" autocomplete="new-password" [ngModel]="confirm()"
+                 (ngModelChange)="confirm.set($event)" required />
+        </label>
+        <label class="check">
+          <input type="checkbox" name="terms" [ngModel]="accepted()" (ngModelChange)="accepted.set($event)" />
+          <span>I understand Mentalist is for learning, not financial advice, and I’ve read
+            <a routerLink="/about">how my data is handled</a>.</span>
+        </label>
+        @if (formError()) {
+          <p class="error" role="alert">{{ formError() }}</p>
+        }
+        <button type="submit" [disabled]="loading()">{{ loading() ? 'Creating your account…' : 'Create account' }}</button>
+        <p class="field-hint">No email needed. Keep your password safe: there’s no reset without an email address.</p>
+      </form>
+    } @else {
+      <form class="sign-in" (ngSubmit)="submit()" aria-label="Sign in">
+        <label>
+          Username
+          <input type="text" name="username" autocomplete="username" [ngModel]="username()" (ngModelChange)="username.set($event)"
+                 required #usernameInput />
+        </label>
+        <label>
+          Password
+          <input type="password" name="password" autocomplete="current-password" [ngModel]="password()"
+                 (ngModelChange)="password.set($event)" required />
+        </label>
+        @if (formError()) {
+          <p class="error" role="alert">{{ formError() }}</p>
+        }
+        <button type="submit" [disabled]="loading() || !username().trim() || !password()">
+          {{ loading() ? 'Signing in…' : 'Sign in' }}
+        </button>
+      </form>
+      @if (!hosting.publicMode()) {
+        <p class="hint">Demo accounts: <code>admin / admin-pass</code> · <code>demo / demo-pass</code></p>
+      }
+    }
+
+    <p class="links">
+      <a routerLink="/about">About &amp; privacy</a>
+      <span aria-hidden="true">·</span>
+      <a [href]="githubUrl" target="_blank" rel="noopener">Code on GitHub</a>
+    </p>
+  </div>
 </div>

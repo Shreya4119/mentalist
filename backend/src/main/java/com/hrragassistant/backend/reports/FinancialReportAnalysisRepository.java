@@ -14,4 +14,6 @@ public interface FinancialReportAnalysisRepository extends JpaRepository<Financi
     List<FinancialReportAnalysis> findByDocumentIdIn(Collection<UUID> documentIds);
 
     List<FinancialReportAnalysis> findByStatusIn(Collection<ReportAnalysisStatus> statuses);
+
+    List<FinancialReportAnalysis> findByUploadedBy(String uploadedBy);
 }

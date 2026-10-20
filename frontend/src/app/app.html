@@ -35,10 +35,18 @@
         }
       </div>
 
-      <span class="user-name">{{ auth.username() }} ({{ auth.role() }})</span>
+      <span class="user-name">{{ auth.displayName() }}</span>
       <button type="button" (click)="logout()">Log out</button>
     </div>
   </nav>
 }
 
 <router-outlet />
+
+@if (auth.isAuthenticated()) {
+  <footer class="app-footer">
+    <span>Educational tool, not financial advice.</span>
+    <a routerLink="/about">About &amp; privacy</a>
+    <a routerLink="/account">Your account</a>
+  </footer>
+}

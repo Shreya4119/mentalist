@@ -17,4 +17,6 @@ public interface StoredDocumentRepository extends JpaRepository<StoredDocument, 
     List<StoredDocumentSummary> findSummariesByKindOrderByUploadedAtDesc(DocumentKind kind);
 
     java.util.Optional<StoredDocumentSummary> findFirstBySha256AndKind(String sha256, DocumentKind kind);
+
+    List<StoredDocumentSummary> findBySha256AndKind(String sha256, DocumentKind kind);
 }

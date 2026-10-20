@@ -11,4 +11,7 @@ public interface HouseholdSnapshotRepository extends JpaRepository<HouseholdSnap
     List<HouseholdSnapshot> findByUsernameOrderByCreatedAtDesc(String username);
 
     Optional<HouseholdSnapshot> findByIdAndUsername(UUID id, String username);
+
+    /** Account deletion: removes all of a person's saved checks. */
+    long deleteByUsername(String username);
 }

@@ -12,6 +12,8 @@ import { Login } from './login/login';
  */
 export const routes: Routes = [
   { path: 'login', component: Login },
+  { path: 'about', loadComponent: () => import('./about/about').then((m) => m.AboutPage) },
+  { path: 'account', canActivate: [authGuard], loadComponent: () => import('./account/account').then((m) => m.AccountPage) },
   { path: 'reports', canActivate: [authGuard], loadComponent: () => import('./reports/list/reports-list').then((m) => m.ReportsList) },
   { path: 'reports/compare', canActivate: [authGuard], loadComponent: () => import('./reports/compare/report-compare').then((m) => m.ReportComparePage) },
   { path: 'reports/learn', canActivate: [authGuard], loadComponent: () => import('./reports/learn/learn').then((m) => m.LearnPage) },

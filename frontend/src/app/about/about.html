@@ -1,0 +1,43 @@
+<div class="about-page">
+  <a [routerLink]="auth.isAuthenticated() ? '/reports' : '/login'" class="back-link">
+    ← {{ auth.isAuthenticated() ? 'Financial reports' : 'Sign-in page' }}
+  </a>
+
+  <header>
+    <h1>About &amp; privacy</h1>
+    <p class="subtitle">Mentalist is a learning project: an AI mentor for reading company annual reports and getting started with investing.</p>
+  </header>
+
+  <section class="card">
+    <h2>What it is, and what it isn’t</h2>
+    <ul>
+      <li>It reads annual reports with an AI model, computes standard ratios and a health score in code, and explains them in plain language.</li>
+      <li><strong>It is educational, not financial, tax or legal advice.</strong> It doesn’t know your situation and can misread a report. Check important figures in the original document, and talk to a licensed adviser before big decisions.</li>
+      <li>A healthy company isn’t automatically a good investment: the share price may already be too high.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Your data</h2>
+    <ul>
+      <li><strong>Your account</strong> is just a username and a password (stored as a secure hash). No email, no real name.</li>
+      <li><strong>Reports you upload are private</strong>: only you can see them. Sample reports added by the site owner are visible to everyone.</li>
+      <li><strong>To analyse a report</strong>, the relevant pages are sent to the AI provider (Google Gemini). <strong>Questions</strong> you ask are sent there too. Upload public annual reports, not personal documents.</li>
+      <li><strong>Household health checks</strong> you save are stored with your account so you can come back to them. Rounded numbers are fine.</li>
+      <li><strong>Your IP address</strong> is used briefly, in memory, to stop abuse (too many sign-in attempts or new accounts). It isn’t stored in the database.</li>
+      <li><strong>No tracking</strong>: no ads, no analytics, no cookies. Your sign-in and theme are kept in your own browser’s storage.</li>
+      <li><strong>Delete everything</strong> any time from <a routerLink="/account">Your account</a>: your account, your reports and their files, and your health checks are removed permanently.</li>
+      @if (hosting.publicMode()) {
+        <li>To keep AI costs fair, each account has a small daily allowance of report analyses and questions.</li>
+      }
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Run it yourself</h2>
+    <p>
+      The full source is on <a [href]="githubUrl" target="_blank" rel="noopener">GitHub</a> (Spring Boot, Angular, Postgres + pgvector).
+      Run it on your own computer with your own AI key to analyse any report. Questions or problems: open an issue there.
+    </p>
+  </section>
+</div>

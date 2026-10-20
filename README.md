@@ -120,6 +120,24 @@ backend → containerized Postgres/Redis/LocalStack → host Ollama via
 
 `docker compose -f docker-compose.prod.yml down` tears it back down.
 
+## Running it as a public website
+
+The same app runs on one small server for real users (Oracle Cloud Always
+Free or a ~€6/month Hetzner server), with free HTTPS. On the public server:
+
+- people **create an account** (username + password, no email) and can delete it, with all their data, at any time;
+- **uploaded reports are private** to the person who uploaded them; reports the admin uploads appear for everyone as **Sample** reports;
+- each account has a **daily AI allowance** (3 report analyses and 30 questions by default) and the whole site has a daily ceiling, so costs stay predictable; the admin is not limited;
+- sign-in and sign-up are rate-limited, and the backend refuses to start with the development secrets from this repository.
+
+```bash
+./deploy/public/make-env.sh                                # once: domain, Gemini key, admin password
+docker compose -f docker-compose.public.yml up -d --build  # Caddy (HTTPS) + app + Postgres + Redis + queue + Ollama
+```
+
+Step-by-step guide, costs and day-to-day commands: [deploy/PUBLIC_SERVER.md](deploy/PUBLIC_SERVER.md).
+Locally none of this changes anything: no sign-up page, no limits.
+
 ## CI/CD
 
 `.github/workflows/ci.yml`: compiles and tests the backend (the

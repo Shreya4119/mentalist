@@ -38,8 +38,8 @@ public class ReportController {
     }
 
     @GetMapping
-    public List<ReportService.ReportSummary> list() {
-        return reportService.list();
+    public List<ReportService.ReportSummary> list(Authentication auth) {
+        return reportService.list(auth.getName(), isAdmin(auth));
     }
 
     @PostMapping
@@ -47,7 +47,7 @@ public class ReportController {
                                                               @RequestParam(value = "provider", required = false) String provider,
                                                               Authentication auth) throws IOException {
         // "file" may repeat: several page photos are combined into one report.
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(reportService.upload(files, provider, auth.getName()));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(reportService.upload(files, provider, auth.getName(), isAdmin(auth)));
     }
 
     @org.springframework.web.bind.annotation.ExceptionHandler(ReportService.DuplicateReport.class)
@@ -57,8 +57,8 @@ public class ReportController {
     }
 
     @GetMapping("/compare")
-    public ReportComparator.Comparison compare(@RequestParam("a") UUID a, @RequestParam("b") UUID b) {
-        return reportService.compare(a, b);
+    public ReportComparator.Comparison compare(@RequestParam("a") UUID a, @RequestParam("b") UUID b, Authentication auth) {
+        return reportService.compare(a, b, auth.getName(), isAdmin(auth));
     }
 
     @GetMapping("/{id}")

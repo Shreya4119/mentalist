@@ -20,11 +20,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   return next(authorizedReq).pipe(
     catchError((error: unknown) => {
       const isAuthFailure = error instanceof HttpErrorResponse && error.status === 401;
-      const isLoginRequest = req.url.includes('/api/auth/login');
+      const isLoginRequest = req.url.includes('/api/auth/');
 
-      if (isAuthFailure && !isLoginRequest) {
+      // Only the first failing request signs out; later ones in flight would otherwise
+      // replace the "session ended" page with a plain redirect.
+      if (isAuthFailure && !isLoginRequest && authService.isAuthenticated()) {
         authService.logout();
-        router.navigate(['/login']);
+        router.navigate(['/login'], { queryParams: { session: 'ended' } });
       }
       return throwError(() => error);
     }),

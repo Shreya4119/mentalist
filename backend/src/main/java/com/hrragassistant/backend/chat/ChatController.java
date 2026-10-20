@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,8 @@ import com.hrragassistant.backend.reports.FinancialReportAnalysisRepository;
 import com.hrragassistant.backend.reports.ReportAnalysisStatus;
 import com.hrragassistant.backend.ingestion.StoredDocument;
 import com.hrragassistant.backend.ingestion.StoredDocumentRepository;
+import com.hrragassistant.backend.hosting.UsageLimits;
+import com.hrragassistant.backend.reports.ReportAccess;
 
 @RestController
 public class ChatController {
@@ -29,20 +32,26 @@ public class ChatController {
     private final ChatService chatService;
     private final StoredDocumentRepository documentRepository;
     private final FinancialReportAnalysisRepository analysisRepository;
+    private final UsageLimits limits;
+    private final ReportAccess access;
 
     public ChatController(ChatService chatService, StoredDocumentRepository documentRepository,
-                          FinancialReportAnalysisRepository analysisRepository) {
+                          FinancialReportAnalysisRepository analysisRepository, UsageLimits limits, ReportAccess access) {
         this.chatService = chatService;
         this.documentRepository = documentRepository;
         this.analysisRepository = analysisRepository;
+        this.limits = limits;
+        this.access = access;
     }
 
     @PostMapping("/api/chat")
-    public ChatAnswerResponse ask(@Valid @RequestBody ChatRequest request) {
+    public ChatAnswerResponse ask(@Valid @RequestBody ChatRequest request, Authentication auth) {
         // Every question is about exactly one financial report.
         StoredDocument document = documentRepository.findById(request.documentId())
                 .filter(d -> d.getKind() == DocumentKind.FINANCIAL_REPORT)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Report not found: " + request.documentId()));
+        boolean admin = isAdmin(auth);
+        access.requireView(document.getId(), auth.getName(), admin);
         DocumentStatus status = document.getStatus();
         // A report is chat-ready as soon as its AI analysis is done: the analysis digest is
         // indexed straight away, while the full text of a long annual report may still be
@@ -54,6 +63,7 @@ public class ChatController {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Report is not ready for questions yet (status " + status + ")");
         }
 
+        limits.acquireQuestion(auth.getName(), admin);
         ChatService.AskResult result = chatService.ask(request.conversationId(), request.question(), request.documentId());
 
         return new ChatAnswerResponse(
@@ -83,6 +93,10 @@ public class ChatController {
     public ResponseEntity<Void> feedback(@PathVariable UUID messageId, @Valid @RequestBody FeedbackRequest request) {
         chatService.submitFeedback(messageId, request.rating());
         return ResponseEntity.ok().build();
+    }
+
+    private static boolean isAdmin(Authentication auth) {
+        return auth.getAuthorities().stream().anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
     }
 
     /** documentId (a report id) is required: retrieval is always limited to that one report. */

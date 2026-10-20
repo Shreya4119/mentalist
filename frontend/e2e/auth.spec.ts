@@ -98,7 +98,8 @@ test.describe('Authentication & access control', () => {
     api.failNext.chat = 401;
     await page.getByPlaceholder('Ask a question…').fill('hello');
     await page.getByRole('button', { name: 'Send' }).click();
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/login\?session=ended$/);
+    await expect(page.getByText('Your session ended. Please sign in again.')).toBeVisible();
   });
 
   for (const status of [403, 404, 500]) {

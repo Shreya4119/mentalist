@@ -32,6 +32,8 @@ export interface ReportSummary {
   errorMessage: string | null;
   analysisRequestedAt: string | null;
   analysisCompletedAt: string | null;
+  /** Uploaded by the site owner and visible to everyone. */
+  shared?: boolean;
 }
 
 export interface Finding {

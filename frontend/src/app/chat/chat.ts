@@ -1,3 +1,4 @@
+import { HostingService, serverMessage } from '../core/hosting.service';
 import { Component, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -23,6 +24,7 @@ export class Chat implements OnInit, OnDestroy {
   private readonly chatService = inject(ChatService);
   private readonly reportsService = inject(ReportsService);
   private readonly route = inject(ActivatedRoute);
+  private readonly hosting = inject(HostingService);
   private readonly router = inject(Router);
 
   readonly question = signal('');
@@ -109,6 +111,7 @@ export class Chat implements OnInit, OnDestroy {
 
     this.chatService.ask(question, this.conversationId, this.documentId).subscribe({
       next: (response) => {
+        this.hosting.refreshLimits();
         this.conversationId = response.conversationId;
         this.messages.update((msgs) => [
           ...msgs,
@@ -124,7 +127,9 @@ export class Chat implements OnInit, OnDestroy {
       },
       error: (err: { status?: number }) => {
         this.sending.set(false);
-        if (err.status === 404 || err.status === 409) {
+        if (err.status === 429 || err.status === 403) {
+          this.error.set(serverMessage(err) ?? 'You’ve reached today’s question limit. It resets at midnight (Amsterdam time).');
+        } else if (err.status === 404 || err.status === 409) {
           this.scopeError.set(true);
           this.error.set('This report is no longer available for questions. Go back to Financial reports to pick another.');
         } else {
