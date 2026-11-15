@@ -69,7 +69,16 @@ Check with `ping mentalist.duckdns.org` that it resolves to your server.
 
 ## 4. Install and start
 
-SSH into the server, then:
+**Quickest:** SSH into the server and paste this one line. It opens the
+ports (Oracle), adds swap on small servers, installs Docker, downloads
+Mentalist, asks for your domain, Gemini key and admin password, then builds
+and starts everything and tells you when it's live:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Shreya4119/mentalist/main/deploy/public/setup-server.sh)
+```
+
+**Or step by step:** SSH into the server, then:
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
