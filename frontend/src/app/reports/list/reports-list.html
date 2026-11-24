@@ -18,7 +18,7 @@
     <div class="upload-main">
       <div>
         <p class="upload-title">{{ uploading() ? progressText() : 'Drop a report here, or choose a file' }}</p>
-        <p class="upload-hint">PDF, images (PNG, JPG, WEBP, TIFF), XLSX/XLS/CSV, DOCX or TXT · up to {{ maxUploadMb }} MB · several page photos at once become one report</p>
+        <p class="upload-hint">PDF, images (PNG, JPG, WEBP, TIFF), XLSX/XLS/CSV, DOCX or TXT · up to {{ maxUploadMb() }} MB · several page photos at once become one report</p>
       </div>
       <div class="upload-actions">
         @if (configuredProviders().length > 1) {

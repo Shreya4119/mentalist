@@ -202,6 +202,16 @@ export const LESSONS: Lesson[] = [
     ],
   },
   {
+    id: 'warnings', title: 'Warning signs over the years', blurb: 'Why trends beat single years, and three classic scores that flag strength, distress and suspicious earnings.',
+    slides: [
+      term('officialFilings', undefined, undefined, undefined, 'Exact figures from the filing beat AI reading a PDF.'),
+      term('multiYearTrend', 'growth-bars', 'revenue', 'One year shows a snapshot; several years show the direction.'),
+      term('piotroski', undefined, undefined, undefined, 'More “yes” answers = a business getting stronger.'),
+      term('altmanZ', undefined, undefined, undefined, 'A signal from many past bankruptcies, not a prediction for one company.'),
+      term('beneishM', undefined, undefined, undefined, 'A reason to read the notes carefully, never proof of fraud.'),
+    ],
+  },
+  {
     id: 'household', title: 'Your household money', blurb: 'The same thinking for your own finances: buffers, savings, debt, goals, fees and spreading risk.',
     slides: [
       term('householdScore', 'score-gauge'),

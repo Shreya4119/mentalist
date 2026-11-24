@@ -10,10 +10,13 @@ export interface ThemeOption {
 
 const STORAGE_KEY = 'mentalist_theme';
 
+/** Forest (green) is the default for everyone who hasn't picked a theme. */
+export const DEFAULT_THEME: Theme = 'forest';
+
 export const THEME_OPTIONS: ThemeOption[] = [
-  { id: 'warm', name: 'Warm Coral', swatch: '#ff6b57' },
-  { id: 'ocean', name: 'Ocean', swatch: '#2b8ab0' },
   { id: 'forest', name: 'Forest', swatch: '#4f8a5b' },
+  { id: 'ocean', name: 'Ocean', swatch: '#2b8ab0' },
+  { id: 'warm', name: 'Warm Coral', swatch: '#ff6b57' },
   { id: 'midnight', name: 'Midnight', swatch: '#7c9cff' },
 ];
 
@@ -35,7 +38,7 @@ export class ThemeService {
 
   private loadTheme(): Theme {
     const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('hr_rag_theme');
-    return stored && VALID_THEMES.has(stored as Theme) ? (stored as Theme) : 'warm';
+    return stored && VALID_THEMES.has(stored as Theme) ? (stored as Theme) : DEFAULT_THEME;
   }
 
   private applyTheme(theme: Theme): void {

@@ -5,6 +5,8 @@ export interface PublicConfig {
   publicMode: boolean;
   signupEnabled: boolean;
   minPasswordLength: number;
+  /** The server's upload limit (older servers don't send it). */
+  maxUploadMb?: number;
 }
 
 /** Today's AI allowance for the signed-in person. -1 means unlimited. */

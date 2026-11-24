@@ -1,0 +1,185 @@
+<div class="companies-page company">
+  <a routerLink="/companies" class="back-link">← Companies</a>
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+  @if (!view() && !error()) {
+    <p class="muted">Loading…</p>
+  }
+
+  @if (view(); as v) {
+    @let h = v.history;
+    <header class="page-header">
+      <h1>{{ v.company.name }}</h1>
+      <p class="subtitle">
+        {{ v.company.country ?? '' }}{{ v.company.country ? ' · ' : '' }}{{ h.trends.yearsOfData }} years of figures from official filings
+        <app-info-tip term="officialFilings" />
+        @if (v.company.importedAt) { · updated {{ v.company.importedAt | date: 'mediumDate' }} }
+      </p>
+      @if (auth.isAdmin()) {
+        <button type="button" class="small plain" (click)="refresh()" [disabled]="refreshing()">
+          {{ refreshing() ? 'Reading filings…' : 'Refresh from filings' }}
+        </button>
+      }
+    </header>
+
+    @if (v.importNote) {
+      <p class="notice">{{ v.importNote }}</p>
+    }
+
+    <section class="card glance" aria-label="Trend at a glance">
+      <h2>Trend at a glance <app-info-tip term="multiYearTrend" /></h2>
+      <dl class="kpis">
+        <div><dt>Sales growth per year</dt><dd data-testid="revenue-cagr">{{ pct(h.trends.revenueCagr) }}</dd></div>
+        <div><dt>Profit growth per year</dt><dd>{{ pct(h.trends.netIncomeCagr) }}</dd></div>
+        <div><dt>Cash-flow growth per year</dt><dd>{{ pct(h.trends.operatingCashFlowCagr) }}</dd></div>
+        <div><dt>Years sales grew / fell</dt><dd>{{ h.trends.revenueGrowthYears }} / {{ h.trends.revenueDeclineYears }}</dd></div>
+      </dl>
+      <p class="hint">Average yearly growth from {{ h.trends.firstYear?.slice(0, 4) }} to {{ h.trends.lastYear?.slice(0, 4) }}. “—” means it can’t be computed (e.g. a loss in the first or last year).</p>
+    </section>
+
+    <section class="charts" aria-label="Charts">
+      <div class="card">
+        <app-year-bars title="Revenue and net income" [years]="yearLabels()"
+                       [series]="[series('REVENUE', 'Revenue'), series('NET_INCOME', 'Net income')]"
+                       [format]="moneyFormat()" [latest]="growthLine('REVENUE', 'Revenue')" />
+      </div>
+      <div class="card">
+        <app-year-bars title="Cash flow vs profit" [years]="yearLabels()"
+                       [series]="[series('OPERATING_CASH_FLOW', 'Operating cash flow'), series('NET_INCOME', 'Net income')]"
+                       [format]="moneyFormat()" latest="Healthy companies usually turn profit into at least as much cash." />
+      </div>
+      <div class="card">
+        <app-year-bars title="Margins" [years]="yearLabels()"
+                       [series]="[ratioSeries('operatingMargin', 'Operating margin'), ratioSeries('netMargin', 'Net margin')]"
+                       [format]="pctFormat" />
+      </div>
+      <div class="card">
+        <app-year-bars title="Long-term borrowings and equity" [years]="yearLabels()"
+                       [series]="[series('NONCURRENT_BORROWINGS', 'Long-term borrowings'), series('EQUITY', 'Equity')]"
+                       [format]="moneyFormat()" />
+      </div>
+    </section>
+
+    <section class="scores" aria-label="Warning-sign scores">
+      @if (latestPiotroski(); as p) {
+        <article class="card score">
+          <h2>Financial strength <app-info-tip term="piotroski" /></h2>
+          <p class="big"><span data-testid="piotroski-score">{{ p.score }}</span><span class="of"> / 9</span></p>
+          <p class="verdict">{{ p.verdict }}</p>
+          <ul class="signals">
+            @for (s of p.signals; track s.key) {
+              <li [class]="'sig ' + s.result.toLowerCase()">
+                <span class="icon" aria-hidden="true">{{ s.result === 'PASS' ? '✓' : s.result === 'FAIL' ? '✕' : '–' }}</span>
+                <span><strong>{{ s.label }}</strong>
+                  <span class="sr">{{ s.result === 'PASS' ? '(yes)' : s.result === 'FAIL' ? '(no)' : '(unknown)' }}</span>
+                  <br /><span class="detail">{{ s.detail }}</span></span>
+              </li>
+            }
+          </ul>
+          <p class="hint">{{ p.periodEnd.slice(0, 4) }} compared with the year before.</p>
+        </article>
+      }
+      @if (latestAltman(); as a) {
+        <article class="card score">
+          <h2>Distress risk <app-info-tip term="altmanZ" /></h2>
+          @if (a.z !== null) {
+            <p class="big"><span data-testid="altman-z">{{ a.z.toFixed(2) }}</span>
+              <span [class]="'zone ' + (a.zone ?? '').toLowerCase()">{{ a.zone === 'SAFE' ? 'Safe zone' : a.zone === 'GREY' ? 'Grey zone' : 'Distress zone' }}</span></p>
+          }
+          <p class="verdict">{{ a.verdict }}</p>
+          @if (a.missing.length) {
+            <p class="hint">Missing: {{ a.missing.join(', ') }}.</p>
+          }
+          <ul class="history">
+            @for (z of h.altman; track z.periodEnd) {
+              <li>{{ z.periodEnd.slice(0, 4) }}: {{ z.z !== null ? z.z.toFixed(2) : '—' }}</li>
+            }
+          </ul>
+          <p class="hint">Above 2.6 safe · 1.1–2.6 grey · below 1.1 distress (Z″ with book values).</p>
+        </article>
+      }
+      @if (latestBeneish(); as b) {
+        <article class="card score">
+          <h2>Earnings quality <app-info-tip term="beneishM" /></h2>
+          @if (b.m !== null) {
+            <p class="big"><span data-testid="beneish-m">{{ b.m.toFixed(2) }}</span>
+              <span [class]="'zone ' + (b.flagged ? 'grey' : 'safe')">{{ b.flagged ? 'Worth a closer look' : 'No unusual patterns' }}</span></p>
+          }
+          <p class="verdict">{{ b.verdict }}</p>
+          @if (b.missing.length) {
+            <p class="hint">Missing: {{ b.missing.join(', ') }}.</p>
+          }
+          <p class="hint">Warning line: −1.78. A higher score isn’t proof of anything; it means read the notes carefully.</p>
+        </article>
+      }
+    </section>
+
+    <section class="findings" aria-label="Patterns found">
+      <div class="card">
+        <h2>Warning signs</h2>
+        @if (h.warnings.length === 0) {
+          <p class="muted">No warning patterns found in the years shown.</p>
+        } @else {
+          <ul class="finding-list">
+            @for (w of h.warnings; track w.key + w.periodEnd) {
+              <li class="warn"><strong>{{ w.title }}</strong><br /><span class="detail">{{ w.evidence }}</span></li>
+            }
+          </ul>
+        }
+      </div>
+      <div class="card">
+        <h2>Strengths</h2>
+        @if (h.strengths.length === 0) {
+          <p class="muted">No multi-year strengths stood out (needs at least 3 years).</p>
+        } @else {
+          <ul class="finding-list">
+            @for (s of h.strengths; track s.key) {
+              <li class="good"><strong>{{ s.title }}</strong><br /><span class="detail">{{ s.evidence }}</span></li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+
+    <section class="card figures" aria-label="Figures by year">
+      <h2>Figures by year ({{ currency() ?? '' }})</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Item</th>@for (y of years(); track y.periodEnd) { <th scope="col">{{ y.periodEnd.slice(0, 4) }}</th> }</tr>
+          </thead>
+          <tbody>
+            @for (row of tableRows; track row.metric) {
+              <tr>
+                <th scope="row">{{ row.label }}</th>
+                @for (y of years(); track y.periodEnd) {
+                  <td [title]="conceptOf(y, row.metric)">{{ money(y.figures[row.metric] ?? null, null) }}</td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">Hover a number to see the IFRS label it was read from.</p>
+      <h3>Sources</h3>
+      <ul class="sources">
+        @for (s of v.sources; track s.periodEnd) {
+          <li>
+            {{ s.periodEnd.slice(0, 4) }}:
+            @if (s.viewerUrl) {
+              <a [href]="s.viewerUrl" target="_blank" rel="noopener">annual report {{ s.filingPeriodEnd?.slice(0, 4) }}</a>
+            } @else { annual report {{ s.filingPeriodEnd?.slice(0, 4) }} }
+            @if (s.filingPeriodEnd && s.filingPeriodEnd.slice(0, 4) !== s.periodEnd.slice(0, 4)) { (comparative figures) }
+          </li>
+        }
+      </ul>
+    </section>
+
+    <p class="disclaimer">
+      Educational analysis of published figures, computed with standard formulas; not investment advice. Past patterns don’t predict the future.
+      Check anything important in the official report, and consider a licensed adviser before investing.
+    </p>
+  }
+</div>

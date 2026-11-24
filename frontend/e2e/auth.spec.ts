@@ -40,7 +40,7 @@ test.describe('Authentication & access control', () => {
     await login(page, 'admin');
     await expect(page.getByRole('heading', { name: 'Financial reports' })).toBeVisible();
     const nav = page.locator('nav.topbar');
-    await expect(nav.getByRole('link')).toHaveText(['Financial reports', 'My plan', 'Learn']);
+    await expect(nav.getByRole('link')).toHaveText(['Financial reports', 'Companies', 'My plan', 'Learn']);
     await expect(page.getByText('admin (ADMIN)')).toBeVisible();
     await expect(page.locator('.brand')).toHaveText('Mentalist');
   });

@@ -118,7 +118,7 @@ test.describe('Learning aids for non-finance users', () => {
   test('LEARN-11 lessons are illustrated slides you can step through with buttons, dots and arrow keys', async ({ page, api }) => {
     await login(page, 'admin');
     await page.goto('/reports/learn');
-    await expect(page.locator('.lesson-card')).toHaveCount(10);
+    await expect(page.locator('.lesson-card')).toHaveCount(11);
     await page.getByRole('link', { name: 'Start lesson 1: Start here' }).click();
     await expect(page).toHaveURL(/lesson=start&slide=1/);
     await expect(page.getByText('Slide 1 of 5')).toBeVisible();

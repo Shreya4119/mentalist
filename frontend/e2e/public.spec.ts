@@ -39,6 +39,40 @@ test.describe('Public server', () => {
     await expect(page.getByText('admin / admin-pass')).toHaveCount(0);
   });
 
+  test('PUB-01b sign-up sends the form token and an empty hidden field; bots that fill it are refused', async ({ page, api }) => {
+    await signUp(page);
+    await page.waitForURL('**/reports');
+    expect(api.signupBodies).toHaveLength(1);
+    expect(api.signupBodies[0].formToken).toMatch(/^form-\d+$/);
+    expect(api.signupBodies[0].website).toBe('');
+    // The hidden field is not reachable by keyboard or screen readers.
+    await page.evaluate(() => localStorage.clear());
+    await page.goto('/login?mode=signup');
+    const hidden = page.locator('input[name="website"]');
+    await expect(hidden).toHaveAttribute('tabindex', '-1');
+    await expect(page.locator('.hp')).toHaveAttribute('aria-hidden', 'true');
+    await hidden.fill('https://spam.example', { force: true });
+    const form = page.getByRole('form', { name: 'Create account' });
+    await form.getByLabel('Choose a username').fill('spambot');
+    await form.getByLabel('Password', { exact: true }).fill('my portfolio 2026');
+    await form.getByLabel('Repeat password').fill('my portfolio 2026');
+    await form.getByRole('checkbox').check();
+    await form.getByRole('button', { name: 'Create account' }).click();
+    await expect(form.getByRole('alert')).toHaveText("Sign-up couldn't be completed. Please reload the page and try again.");
+    expect(api.signedUp.has('spambot')).toBe(false);
+  });
+
+  test('PUB-01c the upload hint and size check use the server’s limit', async ({ page, api }) => {
+    api.maxUploadMb = 20;
+    await signUp(page);
+    await page.waitForURL('**/reports');
+    await expect(page.getByText(/up to 20 MB/)).toBeVisible();
+    await page.getByLabel('Choose a financial report to upload').setInputFiles({
+      name: 'huge-annual-report.pdf', mimeType: 'application/pdf', buffer: Buffer.alloc(21 * 1024 * 1024, 0x25),
+    });
+    await expect(page.getByText('huge-annual-report.pdf is 21 MB; the limit is 20 MB', { exact: false })).toBeVisible();
+  });
+
   test('PUB-02 sign-up explains what to fix', async ({ page, api }) => {
     await page.goto('/login');
     await page.getByRole('button', { name: 'Create account' }).click();

@@ -40,7 +40,7 @@ export class ReportsList implements OnInit, OnDestroy {
   /** Upload progress 0-100 while bytes are sent; null when idle. */
   readonly progress = signal<number | null>(null);
   readonly progressText = signal('');
-  readonly maxUploadMb = MAX_UPLOAD_MB;
+  readonly maxUploadMb = computed(() => this.hosting.config()?.maxUploadMb ?? MAX_UPLOAD_MB);
 
   readonly configuredProviders = computed(() => this.providers().filter((p) => p.configured));
   readonly noProvider = computed(() => this.providers().length > 0 && this.configuredProviders().length === 0);
@@ -110,7 +110,7 @@ export class ReportsList implements OnInit, OnDestroy {
     if (this.uploading()) {
       return;
     }
-    const problem = checkUpload(files);
+    const problem = checkUpload(files, this.maxUploadMb());
     if (problem) {
       this.uploadError.set(problem);
       this.resetInput();
@@ -157,7 +157,7 @@ export class ReportsList implements OnInit, OnDestroy {
       case 0:
         return "Couldn't reach the server. Check that the backend is running, then try again.";
       case 413:
-        return server ?? `That upload is larger than ${MAX_UPLOAD_MB} MB. Upload just the financial statements pages, or compress the PDF.`;
+        return server ?? `That upload is larger than ${this.maxUploadMb()} MB. Upload just the financial statements pages, or compress the PDF.`;
       case 403:
       case 429:
         return server ?? 'Uploading is not available right now.';

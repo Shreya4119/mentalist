@@ -4,12 +4,22 @@
 	encode zstd gzip
 
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Only this site's own scripts may run (no inline or third-party scripts), so an
+		# injected <script> or event handler is blocked even if one slipped through.
+		# Styles: Angular adds component styles inline; fonts come from Google Fonts.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+		Cross-Origin-Opener-Policy "same-origin"
 		-Server
+	}
+
+	# Refuse oversized uploads at the edge, before they reach the app (the app's own limit is REPORTS_MAX_UPLOAD_MB).
+	request_body {
+		max_size 80MB
 	}
 
 	# Caddy replaces any X-Forwarded-For sent by the visitor with their real

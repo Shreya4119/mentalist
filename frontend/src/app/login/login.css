@@ -109,3 +109,6 @@ label.check a { color: var(--color-primary-hover); font-weight: 600; }
 .links { margin: 0.25rem 0 0; display: flex; justify-content: center; gap: 0.5rem; font-size: 0.85rem; }
 .links a { color: var(--color-text-muted); font-weight: 600; }
 .links a:hover { color: var(--color-primary); }
+
+/* Honeypot for bots: off-screen rather than display:none, which some bots skip. */
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }

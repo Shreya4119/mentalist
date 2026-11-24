@@ -68,8 +68,23 @@ class IngestionPgVectorIntegrationTest {
     @Autowired
     VectorStore vectorStore;
 
+    /** Embeddings need the local Ollama daemon with nomic-embed-text; without it the test is skipped, not failed. */
+    static boolean ollamaHasEmbeddingModel() {
+        try {
+            var client = java.net.http.HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(2)).build();
+            var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create("http://localhost:11434/api/tags"))
+                    .timeout(java.time.Duration.ofSeconds(3)).build();
+            String body = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
+            return body.contains("nomic-embed-text");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     @Test
     void ingestsDocumentAndMakesItRetrievableViaSimilaritySearch() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(ollamaHasEmbeddingModel(),
+                "Ollama with nomic-embed-text isn't running on localhost:11434 (start Ollama, then: ollama pull nomic-embed-text)");
         String reportText = "Northwind Traders - Annual Report FY2025-26, Liquidity\n\n"
                 + "Current assets were EUR 480 million against current liabilities of EUR 300 million, "
                 + "giving a current ratio of 1.6 at the balance-sheet date.";
@@ -83,7 +98,7 @@ class IngestionPgVectorIntegrationTest {
         ingestionService.processQueuedDocument(queued.getId());
 
         StoredDocument indexed = documentRepository.findById(queued.getId()).orElseThrow();
-        assertThat(indexed.getStatus()).isEqualTo(DocumentStatus.INDEXED);
+        assertThat(indexed.getStatus()).as("ingestion error: %s", indexed.getErrorMessage()).isEqualTo(DocumentStatus.INDEXED);
         assertThat(indexed.getChunkCount()).isEqualTo(1);
 
         List<Document> results = vectorStore.similaritySearch(

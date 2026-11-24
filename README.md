@@ -170,7 +170,7 @@ investors, **not investment advice**; every page says so.
 
 ### Workflow
 
-1. **Upload** a report (PDF, PNG/JPG/WEBP/TIFF, XLSX/XLS/CSV, DOCX or TXT, up to 250 MB; several page photos at once become one report).
+1. **Upload** a report (PDF, PNG/JPG/WEBP/TIFF, XLSX/XLS/CSV, DOCX or TXT, up to 250 MB locally and 60 MB on the public server; several page photos at once become one report).
    Pick the AI provider if more than one is configured.
 2. The report is stored as a `FINANCIAL_REPORT` document and two things run
    in the background:

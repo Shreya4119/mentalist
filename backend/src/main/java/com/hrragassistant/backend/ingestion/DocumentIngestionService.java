@@ -148,6 +148,8 @@ public class DocumentIngestionService {
             vectorStore.add(chunks);
             storedDoc.markIndexed(chunks.size());
         } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(DocumentIngestionService.class)
+                    .warn("Indexing document {} failed: {}", documentId, e.toString());
             storedDoc.markFailed(e.getMessage());
         }
 

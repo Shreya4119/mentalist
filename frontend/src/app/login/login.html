@@ -35,6 +35,11 @@
           <input type="password" name="confirmPassword" autocomplete="new-password" [ngModel]="confirm()"
                  (ngModelChange)="confirm.set($event)" required />
         </label>
+        <div class="hp" aria-hidden="true">
+          <label>Website (leave empty)
+            <input type="text" name="website" tabindex="-1" autocomplete="off" [ngModel]="website()" (ngModelChange)="website.set($event)" />
+          </label>
+        </div>
         <label class="check">
           <input type="checkbox" name="terms" [ngModel]="accepted()" (ngModelChange)="accepted.set($event)" />
           <span>I understand Mentalist is for learning, not financial advice, and I’ve read

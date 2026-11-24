@@ -89,7 +89,11 @@ app:
     analyses-per-day: ${LIMIT_ANALYSES_PER_DAY:0}
     questions-per-user-per-day: ${LIMIT_QUESTIONS_PER_USER_PER_DAY:0}
     questions-per-day: ${LIMIT_QUESTIONS_PER_DAY:0}
+    imports-per-user-per-day: ${LIMIT_IMPORTS_PER_USER_PER_DAY:0}
     zone: ${LIMIT_ZONE:Europe/Amsterdam}
+  # Official EU annual reports (ESEF) for the Companies pages.
+  filings:
+    base-url: ${FILINGS_BASE_URL:https://filings.xbrl.org}
   seed:
     admin-password: ${ADMIN_PASSWORD:admin-pass}
     demo-password: ${DEMO_PASSWORD:demo-pass}

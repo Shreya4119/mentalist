@@ -21,6 +21,7 @@ import com.hrragassistant.backend.ingestion.StoredDocumentSummary;
 import com.hrragassistant.backend.ingestion.storage.ReportFileStore;
 import com.hrragassistant.backend.reports.intake.FileSniffer;
 import com.hrragassistant.backend.reports.intake.UploadNames;
+import com.hrragassistant.backend.reports.intake.UploadSafety;
 import com.hrragassistant.backend.reports.prep.ImageTools;
 import com.hrragassistant.backend.reports.prep.PdfTools;
 import com.hrragassistant.backend.reports.ai.ReportAnalyzer;
@@ -194,6 +195,11 @@ public class ReportService {
                 try (var in = f.getInputStream()) {
                     stored = fileStore.save(in, UploadNames.extension(filename));
                 }
+                String problem = safetyProblem(kind, fileStore.resolve(stored.relativePath()));
+                if (problem != null) {
+                    fileStore.delete(stored.relativePath());
+                    throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, filename + ": " + problem);
+                }
                 mediaType = kind.isProviderImage() || kind == FileSniffer.Kind.PDF ? kind.mediaType() : null;
             }
         }
@@ -246,9 +252,28 @@ public class ReportService {
         return kind;
     }
 
+    /** Resource checks by file type (page count, pixel count, zip bombs); null when the file is fine. */
+    private static String safetyProblem(FileSniffer.Kind kind, java.nio.file.Path file) throws IOException {
+        if (kind == FileSniffer.Kind.PDF) {
+            return UploadSafety.pdfProblem(file);
+        }
+        if (kind == FileSniffer.Kind.ZIP_OFFICE) {
+            return UploadSafety.zipProblem(file);
+        }
+        if (kind.isProviderImage()) {
+            return UploadSafety.imageProblem(java.nio.file.Files.readAllBytes(file));
+        }
+        return null;
+    }
+
     private static byte[] photosToPdf(List<MultipartFile> parts) throws IOException {
         List<java.awt.image.BufferedImage> pages = new java.util.ArrayList<>();
         for (MultipartFile f : parts) {
+            String problem = UploadSafety.imageProblem(f.getBytes());
+            if (problem != null) {
+                throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                        UploadNames.sanitize(f.getOriginalFilename()) + ": " + problem);
+            }
             try {
                 pages.addAll(ImageTools.readPages(f.getBytes()));
             } catch (IOException e) {

@@ -1,0 +1,124 @@
+<div class="companies-page">
+  <header class="page-header">
+    <h1>Companies</h1>
+    <p class="subtitle">
+      Type the name of a company listed on an EU stock market and press Analyse. Mentalist finds its official annual filings
+      <app-info-tip term="officialFilings" /> itself, reads several years and shows the trends and warning signs. No upload needed,
+      and every number comes straight from the filing.
+    </p>
+  </header>
+
+  <form class="search card" (ngSubmit)="search()" role="search">
+    <label for="company-q">Company name</label>
+    <div class="search-row">
+      <input id="company-q" name="q" type="search" [ngModel]="query()" (ngModelChange)="query.set($event)"
+             placeholder="e.g. Adyen, ASML, Philips, Siemens" autocomplete="off" />
+      <button type="submit" [disabled]="searching() || importing() !== null">{{ searching() ? 'Finding…' : importing() ? 'Analysing…' : 'Analyse' }}</button>
+    </div>
+    <p class="hint">Works for companies listed on an EU-regulated market (annual reports from 2020–2021 onwards).</p>
+  </form>
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+  @if (importing()) {
+    <p class="notice" role="status">Reading the official filings… the first analysis of a company can take up to a minute.</p>
+  }
+
+  @if (hits(); as list) {
+    <section class="card results" aria-label="Matching companies">
+      <h2>{{ list.length ? 'Which company did you mean?' : 'No match' }}</h2>
+      @if (list.length === 0) {
+        <p class="muted">No companies found. Try the official name, e.g. “Koninklijke Philips”.</p>
+      } @else {
+        <ul class="hit-list">
+          @for (h of list; track h.lei) {
+            <li>
+              <span class="hit-name">{{ h.name }}</span>
+              <button type="button" class="small" (click)="open(h)" [disabled]="importing() !== null"
+                      [attr.aria-label]="'Analyse ' + h.name">
+                {{ importing() === h.lei ? 'Reading filings…' : 'Analyse' }}
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+
+  <section class="card browse" aria-labelledby="browse-title">
+    <h2 id="browse-title">Browse by country</h2>
+    <p class="hint top">Every company from that country with an annual report in the filings index. Which of them you can actually buy depends on your broker.</p>
+    <div class="browse-controls">
+      <div class="control">
+        <label for="browse-country">Country</label>
+        <select id="browse-country" [ngModel]="country()" (ngModelChange)="chooseCountry($event)" name="country">
+          <option value="">Choose a country…</option>
+          @for (c of countries(); track c.code) {
+            <option [value]="c.code">{{ c.name }}</option>
+          }
+        </select>
+      </div>
+      @if (directory()) {
+        <div class="control">
+          <label for="browse-filter">Filter by name</label>
+          <input id="browse-filter" type="search" name="filter" [ngModel]="filter()" (ngModelChange)="setFilter($event)" placeholder="e.g. bank, energy, holding" autocomplete="off" />
+        </div>
+      }
+    </div>
+
+    @if (directoryLoading()) {
+      <p class="muted" role="status">Loading the companies of {{ countryName() }}… the first time can take up to half a minute.</p>
+    }
+    @if (directoryError()) {
+      <p class="error" role="alert">{{ directoryError() }}</p>
+    }
+    @if (directory(); as all) {
+      <p class="count" role="status">
+        {{ filtered().length }} {{ filtered().length === 1 ? 'company' : 'companies' }}{{ filter() ? ' match' : '' }} in {{ countryName() }}
+      </p>
+      @if (filtered().length) {
+        <ul class="directory" [attr.aria-label]="'Companies in ' + countryName()">
+          @for (c of visible(); track c.lei) {
+            <li>
+              <span class="dir-name">{{ c.name }}
+                <span class="dir-meta">{{ c.lastPeriodEnd ? 'latest report ' + c.lastPeriodEnd.slice(0, 4) : 'report year unknown' }}</span>
+              </span>
+              <button type="button" class="small" [class.plain]="!c.imported" (click)="open(c)" [disabled]="importing() !== null"
+                      [attr.aria-label]="(c.imported ? 'Open ' : 'Analyse ') + c.name">
+                {{ importing() === c.lei ? 'Reading filings…' : c.imported ? 'Open' : 'Analyse' }}
+              </button>
+            </li>
+          }
+        </ul>
+        @if (visible().length < filtered().length) {
+          <button type="button" class="plain more" (click)="showMore()">Show more ({{ filtered().length - visible().length }} left)</button>
+        }
+      }
+    }
+  </section>
+
+  <section class="library" aria-label="Imported companies">
+    <h2>Already analysed</h2>
+    @if (loading()) {
+      <p class="muted">Loading…</p>
+    } @else if (imported().length === 0) {
+      <p class="muted">No companies yet. Type a name above to analyse the first one.</p>
+    } @else {
+      <ul class="company-list">
+        @for (c of imported(); track c.lei) {
+          <li>
+            <a class="company-link card" [routerLink]="['/companies', c.lei]">
+              <span class="name">{{ c.name }}</span>
+              <span class="meta">{{ c.country ?? '' }}{{ c.country ? ' · ' : '' }}{{ years(c) }} · {{ c.yearsOfData }} years of figures</span>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+
+  <p class="disclaimer">
+    Educational analysis of published figures, not investment advice. Filings are found via filings.xbrl.org, a free index that may be incomplete.
+  </p>
+</div>

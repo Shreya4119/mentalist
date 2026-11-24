@@ -7,7 +7,7 @@
  * move the company's health score.
  */
 
-export type GlossaryGroup = 'Start here' | 'Health score' | 'Ratios' | 'Line items' | 'Reading a report' | 'Your household';
+export type GlossaryGroup = 'Start here' | 'Health score' | 'Ratios' | 'Line items' | 'Reading a report' | 'Warning signs' | 'Your household';
 
 export interface GlossaryEntry {
   key: string;
@@ -416,6 +416,51 @@ const ENTRIES: GlossaryEntry[] = [
     what: 'What the company’s leadership says it expects for the coming year: growth plans, guidance, risks.',
     why: 'Useful context, but it is the company talking about itself — compare it with the hard numbers.',
   },
+  // ------------------------------------------------------------------ Warning signs over the years (Companies pages)
+  {
+    key: 'officialFilings', term: 'Official filings (ESEF)', group: 'Warning signs',
+    what: 'Since 2020–2021, companies listed on an EU stock market must publish their annual report in a machine-readable format (ESEF), with every figure in the financial statements tagged. Mentalist reads those tags instead of asking AI to read a PDF.',
+    analogy: 'Like getting a bank statement as a spreadsheet instead of a photo of it: no retyping, no misreading.',
+    why: 'The numbers are exactly what the company filed, so trends and scores can be trusted to match the report. Each figure links back to the filing it came from.',
+    watchOut: 'Mentalist finds filings through filings.xbrl.org, a free index that is not complete. Always check important figures in the official report; banks and insurers use different line items, so some scores don’t apply to them.',
+    related: ['multiYearTrend', 'piotroski'],
+  },
+  {
+    key: 'multiYearTrend', term: 'Multi-year trend', group: 'Warning signs',
+    what: 'How a figure moved over several years, often summarised as compound annual growth (CAGR): the steady yearly rate that would take the first year’s value to the last.',
+    analogy: 'One good exam doesn’t make a good student; five years of report cards tell you much more.',
+    why: 'A single year can be flattered by one-off events. Steady growth in sales, profit and cash over many years is a much stronger sign of a healthy business.',
+    good: 'Sales and cash flow growing most years, margins stable or widening, and profit backed by cash in every year.',
+    watchOut: 'Acquisitions can make sales jump without the business itself growing. Currency changes and restated figures can also distort trends.',
+    related: ['revenueGrowth', 'officialFilings'],
+  },
+  {
+    key: 'piotroski', term: 'Piotroski F-score', group: 'Warning signs',
+    what: 'Nine yes/no checks of financial strength from one year to the next: is it profitable, does it generate cash, is cash flow above profit, is debt falling, is liquidity improving, were no new shares issued, are gross margin and asset turnover improving? One point per “yes”.',
+    analogy: 'A nine-question health check-up: each “yes” is a sign the patient is getting stronger.',
+    why: 'Developed by accounting professor Joseph Piotroski (2000) to separate improving companies from weakening ones using only financial statements.',
+    good: '8–9 is strong, 0–2 is weak, and 3–7 is mixed. Mentalist only judges when at least 6 of the 9 checks can be made.',
+    watchOut: 'It compares only two years and suits ordinary businesses better than banks. Mentalist uses year-end assets, a small simplification of the original.',
+    related: ['altmanZ', 'beneishM'],
+  },
+  {
+    key: 'altmanZ', term: 'Altman Z-score', group: 'Warning signs',
+    what: 'A formula that combines working capital, retained earnings, operating profit and equity, each relative to the company’s size, into one number that resembles the profile of companies that later went bankrupt — or didn’t. Mentalist uses the Z″ version based on book values, which doesn’t need share prices.',
+    analogy: 'Like a credit score for a company: not a prediction for one case, but a signal based on many past cases.',
+    why: 'Created by Professor Edward Altman (1968, later adapted). It is one of the best-known early-warning signals for financial distress.',
+    good: 'Above 2.6: safe zone. 1.1–2.6: grey zone. Below 1.1: distress zone.',
+    watchOut: 'Not meant for banks and insurers, and less reliable for fast-growing young companies. A low score is a reason to look closer, not a verdict.',
+    related: ['piotroski', 'debtToEquity'],
+  },
+  {
+    key: 'beneishM', term: 'Beneish M-score', group: 'Warning signs',
+    what: 'Eight ratios — such as receivables growing faster than sales, falling margins, rising accruals (profit not backed by cash) and rising debt — combined into one score that resembles companies which overstated their earnings.',
+    analogy: 'Like a fraud filter on a credit card: it flags unusual patterns for a human to check, it doesn’t accuse anyone.',
+    why: 'Developed by Professor Messod Beneish (1999), and often cited for flagging Enron years before its collapse. It helps you decide which annual reports deserve a careful read of the notes.',
+    good: 'Below −1.78 is normal. Above −1.78 means some patterns resemble earnings manipulation and are worth investigating.',
+    watchOut: 'Many honest, fast-growing companies score above the line. Treat it as a reason to read the notes, never as proof of wrongdoing.',
+    related: ['cashConversion', 'receivables'],
+  },
   // ------------------------------------------------------------------ Your household (family health check)
   {
     key: 'householdScore', term: 'Household health score', group: 'Your household',
@@ -531,7 +576,7 @@ const ENTRIES: GlossaryEntry[] = [
 ];
 
 export const GLOSSARY: Record<string, GlossaryEntry> = Object.fromEntries(ENTRIES.map((e) => [e.key, e]));
-export const GLOSSARY_GROUPS: GlossaryGroup[] = ['Start here', 'Health score', 'Ratios', 'Line items', 'Reading a report', 'Your household'];
+export const GLOSSARY_GROUPS: GlossaryGroup[] = ['Start here', 'Health score', 'Ratios', 'Line items', 'Reading a report', 'Warning signs', 'Your household'];
 export const GLOSSARY_LIST = ENTRIES;
 
 /**

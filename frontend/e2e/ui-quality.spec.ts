@@ -15,9 +15,13 @@ test.describe('Themes', () => {
     await expect(page.locator('.theme-option.active')).toContainText('Ocean');
   });
 
-  test('THEME-02 default Warm Coral theme has no data-theme attribute', async ({ page, api }) => {
+  test('THEME-02 green Forest is the default theme, from the very first paint', async ({ page, api }) => {
+    await page.goto('/login');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'forest');
     await login(page, 'demo');
-    await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'forest');
+    await page.getByRole('button', { name: 'Change color theme' }).click();
+    await expect(page.locator('.theme-option.active')).toContainText('Forest');
   });
 
   test('THEME-03 theme menu closes on Escape or outside click', async ({ page, api }) => {

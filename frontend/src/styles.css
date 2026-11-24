@@ -32,7 +32,7 @@
   --shadow-md: 0 8px 24px rgba(45, 42, 38, 0.1);
 
   --font-sans:
-    'Nunito',
+    'Plus Jakarta Sans',
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
@@ -73,12 +73,12 @@
   --color-surface: #ffffff;
   --color-surface-alt: #ecf5e9;
 
-  --color-primary: #4f8a5b;
-  --color-primary-hover: #3f7249;
+  --color-primary: #3f7a4c;
+  --color-primary-hover: #33643e;
   --color-primary-soft: #ddedd8;
 
   --color-text: #24301f;
-  --color-text-muted: #718067;
+  --color-text-muted: #5c6b53;
   --color-text-faint: #a6b39d;
 
   --color-border: #dde8d7;

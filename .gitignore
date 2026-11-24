@@ -33,3 +33,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Transfer archives from Claude sessions (never commit)
+/_*.tgz

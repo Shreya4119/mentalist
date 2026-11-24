@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Observable, map, tap } from 'rxjs';
 
 export type Role = 'ADMIN' | 'USER';
 
@@ -43,10 +43,15 @@ export class AuthService {
   }
 
   /** Creates an account and signs in (only when the server has sign-up enabled). */
-  signup(username: string, password: string, acceptedTerms: boolean): Observable<LoginResponse> {
+  signup(username: string, password: string, acceptedTerms: boolean, formToken: string | null, website = ''): Observable<LoginResponse> {
     return this.http
-      .post<LoginResponse>('/api/auth/signup', { username, password, acceptedTerms })
+      .post<LoginResponse>('/api/auth/signup', { username, password, acceptedTerms, formToken, website })
       .pipe(tap((response) => this.store(response, username.trim().toLowerCase())));
+  }
+
+  /** A signed token for a freshly opened sign-up form (bot protection, see SignupGuard on the server). */
+  signupFormToken(): Observable<string> {
+    return this.http.get<{ token: string }>('/api/auth/signup-form').pipe(map((r) => r.token));
   }
 
   /** Deletes the account and everything it owns, then signs out. */

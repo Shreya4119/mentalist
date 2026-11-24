@@ -19,6 +19,8 @@ export const routes: Routes = [
   { path: 'reports/learn', canActivate: [authGuard], loadComponent: () => import('./reports/learn/learn').then((m) => m.LearnPage) },
   { path: 'reports/:id/chat', canActivate: [authGuard], loadComponent: () => import('./chat/chat').then((m) => m.Chat) },
   { path: 'reports/:id', canActivate: [authGuard], loadComponent: () => import('./reports/detail/report-detail').then((m) => m.ReportDetailPage) },
+  { path: 'companies', canActivate: [authGuard], loadComponent: () => import('./companies/companies-page').then((m) => m.CompaniesPage) },
+  { path: 'companies/:lei', canActivate: [authGuard], loadComponent: () => import('./companies/company-page').then((m) => m.CompanyPage) },
   { path: 'plan', canActivate: [authGuard], loadComponent: () => import('./planning/plan-home').then((m) => m.PlanHome) },
   { path: 'plan/check', canActivate: [authGuard], loadComponent: () => import('./planning/plan-check').then((m) => m.PlanCheck) },
   { path: 'plan/:id', canActivate: [authGuard], loadComponent: () => import('./planning/plan-detail').then((m) => m.PlanDetail) },

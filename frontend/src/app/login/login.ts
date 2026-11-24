@@ -22,6 +22,9 @@ export class Login {
   readonly password = signal('');
   readonly confirm = signal('');
   readonly accepted = signal(false);
+  /** Hidden "website" field: people never see it, bots that fill every field do. */
+  readonly website = signal('');
+  private formToken: string | null = null;
   readonly formError = signal<string | null>(null);
   readonly loading = signal(false);
   readonly accountDeleted = signal(this.route.snapshot.queryParamMap.get('deleted') === '1');
@@ -34,6 +37,7 @@ export class Login {
   constructor() {
     this.hosting.loadConfig();
     afterNextRender(() => this.usernameInput()?.nativeElement.focus());
+    if (this.mode() === 'signup') this.loadFormToken();
   }
 
   setMode(mode: 'signin' | 'signup'): void {
@@ -42,6 +46,15 @@ export class Login {
     this.password.set('');
     this.confirm.set('');
     setTimeout(() => (mode === 'signup' ? this.signupName() : this.usernameInput())?.nativeElement.focus());
+    if (mode === 'signup') this.loadFormToken();
+  }
+
+  /** Fetched when the sign-up form opens; the server refuses forms submitted without one or within seconds. */
+  private loadFormToken(): void {
+    this.authService.signupFormToken().subscribe({
+      next: (t) => (this.formToken = t),
+      error: () => (this.formToken = null),
+    });
   }
 
   submit(): void {
@@ -54,7 +67,13 @@ export class Login {
       next: () => this.done(),
       error: (err) => {
         this.loading.set(false);
-        this.formError.set(err?.status === 429 ? (serverMessage(err) ?? 'Too many attempts. Try again later.') : 'Invalid username or password.');
+        this.formError.set(
+          err?.status === 401
+            ? 'Invalid username or password.'
+            : err?.status === 429
+              ? (serverMessage(err) ?? 'Too many attempts. Try again later.')
+              : 'Can’t reach the Mentalist server. Make sure the backend is running, then try again.',
+        );
       },
     });
   }
@@ -68,10 +87,29 @@ export class Login {
     }
     this.formError.set(null);
     this.loading.set(true);
-    this.authService.signup(this.username().trim(), this.password(), this.accepted()).subscribe({
+    if (!this.formToken) {
+      // The token from opening the form hasn't arrived yet (slow network): fetch one, then send.
+      this.authService.signupFormToken().subscribe({
+        next: (t) => {
+          this.formToken = t;
+          this.sendSignup();
+        },
+        error: (err) => {
+          this.loading.set(false);
+          this.formError.set(serverMessage(err) ?? 'Could not create your account. Please try again.');
+        },
+      });
+      return;
+    }
+    this.sendSignup();
+  }
+
+  private sendSignup(): void {
+    this.authService.signup(this.username().trim(), this.password(), this.accepted(), this.formToken, this.website()).subscribe({
       next: () => this.done(),
       error: (err) => {
         this.loading.set(false);
+        this.loadFormToken(); // a fresh one for the next attempt (e.g. after "form expired")
         this.formError.set(serverMessage(err) ?? 'Could not create your account. Please try again.');
       },
     });

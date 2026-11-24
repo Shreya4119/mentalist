@@ -3,6 +3,7 @@ package com.hrragassistant.backend.hosting;
 import java.time.Clock;
 import java.time.ZoneId;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -17,27 +18,53 @@ public class UsageLimits {
 
     static final String ANALYSES = "analyses";
     static final String QUESTIONS = "questions";
+    static final String IMPORTS = "imports";
 
     private final DailyQuota quota;
     private final int analysesPerUser;
     private final int analysesTotal;
     private final int questionsPerUser;
     private final int questionsTotal;
+    private final int importsPerUser;
 
+    /** Spring uses this one; the package-private constructor below is for tests. */
+    @Autowired
     public UsageLimits(@Value("${app.limits.analyses-per-user-per-day:0}") int analysesPerUser,
                        @Value("${app.limits.analyses-per-day:0}") int analysesTotal,
                        @Value("${app.limits.questions-per-user-per-day:0}") int questionsPerUser,
                        @Value("${app.limits.questions-per-day:0}") int questionsTotal,
+                       @Value("${app.limits.imports-per-user-per-day:0}") int importsPerUser,
                        @Value("${app.limits.zone:Europe/Amsterdam}") String zone) {
-        this(new DailyQuota(Clock.system(ZoneId.of(zone))), analysesPerUser, analysesTotal, questionsPerUser, questionsTotal);
+        this(new DailyQuota(Clock.system(ZoneId.of(zone))), analysesPerUser, analysesTotal, questionsPerUser, questionsTotal, importsPerUser);
     }
 
     UsageLimits(DailyQuota quota, int analysesPerUser, int analysesTotal, int questionsPerUser, int questionsTotal) {
+        this(quota, analysesPerUser, analysesTotal, questionsPerUser, questionsTotal, 0);
+    }
+
+    UsageLimits(DailyQuota quota, int analysesPerUser, int analysesTotal, int questionsPerUser, int questionsTotal, int importsPerUser) {
         this.quota = quota;
         this.analysesPerUser = analysesPerUser;
         this.analysesTotal = analysesTotal;
         this.questionsPerUser = questionsPerUser;
         this.questionsTotal = questionsTotal;
+        this.importsPerUser = importsPerUser;
+    }
+
+    /** Company imports download several large filings; each person gets a few per day (no AI cost involved). */
+    public void acquireImport(String username, boolean admin) {
+        if (admin) {
+            return;
+        }
+        acquire(IMPORTS, username, importsPerUser, 0,
+                "You've imported " + importsPerUser + " companies today, your daily limit. Companies others imported are always available.",
+                "");
+    }
+
+    public void releaseImport(String username, boolean admin) {
+        if (!admin) {
+            release(IMPORTS, username, importsPerUser, 0);
+        }
     }
 
     /** Takes one report analysis from this person's and the site's allowance, or throws LimitReached. */

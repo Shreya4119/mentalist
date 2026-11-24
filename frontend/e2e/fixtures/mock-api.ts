@@ -1,6 +1,7 @@
 import { Page, Route, test as base } from '@playwright/test';
 import { ANALYSIS_FY25, ANALYSIS_FY26, COMPARISON } from './report-fixtures';
 import { PLAN_DE, PLAN_NL } from './plan-fixtures';
+import { NORTHWIND_LEI, RIVERSIDE_LEI, northwindView } from './company-fixtures';
 
 export type Role = 'ADMIN' | 'USER';
 export type Username = 'admin' | 'demo';
@@ -258,6 +259,65 @@ export class MockApi {
 
   private conversation = 0;
 
+  // ---- companies (official filings)
+  companies = new Map<string, any>();
+  companyImports: { lei: string; refresh: boolean }[] = [];
+  /** Sign-up bodies as sent, and how many form tokens were handed out. */
+  signupBodies: any[] = [];
+  /** Upload limit the server reports (unset: an older server that doesn't send it). */
+  maxUploadMb: number | undefined;
+  formTokens = 0;
+  directoryCalls: string[] = [];
+  /** Next company import fails with this status and message. */
+  nextImportError: { status: number; message: string } | null = null;
+  importDelayMs = 0;
+
+  addCompany() {
+    const v = northwindView();
+    this.companies.set(v.company.lei, v);
+    return v;
+  }
+
+  private async handleCompanies(route: Route, role: Role, path: string, method: string, url: URL) {
+    if (path === '/api/companies' && method === 'GET') {
+      return this.json(route, 200, [...this.companies.values()].map((v) => v.company));
+    }
+    if (path === '/api/companies/countries' && method === 'GET') {
+      return this.json(route, 200, [{ code: 'DE', name: 'Germany' }, { code: 'NL', name: 'Netherlands' }]);
+    }
+    if (path === '/api/companies/directory' && method === 'GET') {
+      this.directoryCalls.push(url.searchParams.get('country') ?? '');
+      if (url.searchParams.get('country') === 'DE') return this.json(route, 503, { message: "The filings service (filings.xbrl.org) couldn't be reached. Please try again in a few minutes." });
+      const named = [{ lei: NORTHWIND_LEI, name: 'Northwind Industries NV', lastPeriodEnd: '2024-12-31' }];
+      for (let i = 1; i <= 69; i++) named.push({ lei: `724500DUTCHCO${String(i).padStart(7, '0')}`, name: `Dutch Company ${String(i).padStart(2, '0')} NV`, lastPeriodEnd: i % 10 === 0 ? null as any : '2024-12-31' });
+      named.push({ lei: '724500POLDERBANK00004', name: 'Polder Bank NV', lastPeriodEnd: '2025-12-31' });
+      return this.json(route, 200, named.sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ ...c, country: 'NL', imported: this.companies.has(c.lei) })));
+    }
+    if (path === '/api/companies/search' && method === 'GET') {
+      const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const all = [{ lei: NORTHWIND_LEI, name: 'Northwind Industries NV' }, { lei: RIVERSIDE_LEI, name: 'Riverside Holding SE' }, { lei: '724500NORTHWINDLOG003', name: 'Northwind Logistics AB' }];
+      return this.json(route, 200, all.filter((h) => h.name.toLowerCase().includes(q)).map((h) => ({ ...h, imported: this.companies.has(h.lei) })));
+    }
+    const m = /^\/api\/companies\/([^/]+)(\/import)?$/.exec(path);
+    if (!m) return this.json(route, 404, { message: `No mock for ${method} ${path}` });
+    const lei = decodeURIComponent(m[1]);
+    if (m[2] && method === 'POST') {
+      const refresh = url.searchParams.get('refresh') === 'true';
+      this.companyImports.push({ lei, refresh });
+      if (this.importDelayMs) await new Promise((r) => setTimeout(r, this.importDelayMs));
+      if (this.nextImportError) {
+        const e = this.nextImportError;
+        this.nextImportError = null;
+        return this.json(route, e.status, { message: e.message });
+      }
+      if (lei === RIVERSIDE_LEI) return this.json(route, 404, { message: 'No annual filings were found for this company.' });
+      const v = this.companies.get(lei) ?? this.addCompany();
+      return this.json(route, 200, v);
+    }
+    const v = this.companies.get(lei);
+    return v ? this.json(route, 200, v) : this.json(route, 404, { message: 'Company not imported yet' });
+  }
+
   async install(page: Page) {
     // Keep tests offline-safe: the web font is cosmetic.
     await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, body: '' }));
@@ -312,10 +372,18 @@ export class MockApi {
     }
 
     if (path === '/api/auth/config' && method === 'GET') {
-      return this.json(route, 200, { publicMode: this.publicMode, signupEnabled: this.signupEnabled, minPasswordLength: 10 });
+      return this.json(route, 200, { publicMode: this.publicMode, signupEnabled: this.signupEnabled, minPasswordLength: 10, ...(this.maxUploadMb ? { maxUploadMb: this.maxUploadMb } : {}) });
+    }
+    if (path === '/api/auth/signup-form' && method === 'GET') {
+      if (!this.signupEnabled) return this.json(route, 404, { message: 'Sign-up is not enabled on this server' });
+      return this.json(route, 200, { token: `form-${++this.formTokens}` });
     }
     if (path === '/api/auth/signup' && method === 'POST') {
       if (!this.signupEnabled) return this.json(route, 404, { message: 'Sign-up is not enabled on this server' });
+      const sent = route.request().postDataJSON();
+      this.signupBodies.push(sent);
+      if (sent.website) return this.json(route, 400, { message: "Sign-up couldn't be completed. Please reload the page and try again." });
+      if (!/^form-\d+$/.test(String(sent.formToken ?? ''))) return this.json(route, 400, { message: "Sign-up couldn't be completed. Please reload the page and try again." });
       const { username, password, acceptedTerms } = req.postDataJSON() ?? {};
       const name = String(username ?? '').trim().toLowerCase();
       if (!acceptedTerms) return this.json(route, 400, { message: 'Please confirm that you have read how Mentalist works.' });
@@ -342,6 +410,9 @@ export class MockApi {
     }
     if (path.startsWith('/api/planning/health-check')) {
       return this.handlePlanning(route, username as Username, path, method);
+    }
+    if (path.startsWith('/api/companies')) {
+      return this.handleCompanies(route, role, path, method, url);
     }
     if (path.startsWith('/api/reports')) {
       return this.handleReports(route, role, username, path, method, url);

@@ -32,5 +32,7 @@ LIMIT_ANALYSES_PER_USER_PER_DAY=3
 LIMIT_QUESTIONS_PER_USER_PER_DAY=30
 LIMIT_ANALYSES_PER_DAY=60
 LIMIT_QUESTIONS_PER_DAY=900
+# Company imports from official filings (each downloads several large reports)
+LIMIT_IMPORTS_PER_USER_PER_DAY=5
 ENV
 echo "Created .env (readable only by you). Next: docker compose -f docker-compose.public.yml up -d --build"

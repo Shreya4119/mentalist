@@ -18,7 +18,7 @@ export function extensionOf(name: string): string {
 }
 
 /** Returns a message explaining why these files can't be uploaded, or null when they can. */
-export function checkUpload(files: File[]): string | null {
+export function checkUpload(files: File[], maxMb = MAX_UPLOAD_MB): string | null {
   if (files.length === 0) {
     return 'Choose a file to upload.';
   }
@@ -45,9 +45,9 @@ export function checkUpload(files: File[]): string | null {
     }
   }
   const total = files.reduce((n, f) => n + f.size, 0);
-  if (total > MAX_UPLOAD_MB * 1024 * 1024) {
+  if (total > maxMb * 1024 * 1024) {
     const mb = Math.ceil(total / 1024 / 1024);
-    return `${files.length > 1 ? 'These files are' : files[0].name + ' is'} ${mb} MB; the limit is ${MAX_UPLOAD_MB} MB. Upload just the financial statements pages, or compress the PDF (photos make up most of the size).`;
+    return `${files.length > 1 ? 'These files are' : files[0].name + ' is'} ${mb} MB; the limit is ${maxMb} MB. Upload just the financial statements pages, or compress the PDF (photos make up most of the size).`;
   }
   return null;
 }

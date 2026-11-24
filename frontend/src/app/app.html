@@ -3,6 +3,7 @@
     <span class="brand">Mentalist</span>
     <div class="nav-links">
       <a routerLink="/reports" [class.active]="onReports()" [attr.aria-current]="onReports() ? 'page' : null">Financial reports</a>
+      <a routerLink="/companies" routerLinkActive="active" ariaCurrentWhenActive="page">Companies</a>
       <a routerLink="/plan" routerLinkActive="active" ariaCurrentWhenActive="page">My plan</a>
       <a routerLink="/reports/learn" routerLinkActive="active" ariaCurrentWhenActive="page">Learn</a>
     </div>

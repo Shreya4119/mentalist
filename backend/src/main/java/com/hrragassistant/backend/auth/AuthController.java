@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.hrragassistant.backend.hosting.AuthThrottles;
 import com.hrragassistant.backend.hosting.ClientAddress;
 import com.hrragassistant.backend.hosting.HostingSettings;
+import com.hrragassistant.backend.hosting.SignupGuard;
 import com.hrragassistant.backend.hosting.SignupRules;
 
 @RestController
@@ -25,14 +26,19 @@ public class AuthController {
     private final JwtService jwtService;
     private final HostingSettings hosting;
     private final AuthThrottles throttles;
+    private final SignupGuard signupGuard;
+    private final long maxUploadMb;
 
     public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService,
-                          HostingSettings hosting, AuthThrottles throttles) {
+                          HostingSettings hosting, AuthThrottles throttles, SignupGuard signupGuard,
+                          @org.springframework.beans.factory.annotation.Value("${app.reports.max-upload-mb:250}") long maxUploadMb) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.hosting = hosting;
         this.throttles = throttles;
+        this.signupGuard = signupGuard;
+        this.maxUploadMb = maxUploadMb;
     }
 
     @PostMapping("/api/auth/login")
@@ -58,6 +64,10 @@ public class AuthController {
         if (!hosting.signupEnabled()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sign-up is not enabled on this server");
         }
+        String bot = signupGuard.problem(request.formToken(), request.website());
+        if (bot != null) {
+            return error(HttpStatus.BAD_REQUEST, bot);
+        }
         if (!request.acceptedTerms()) {
             return error(HttpStatus.BAD_REQUEST, "Please confirm that you've read how Mentalist works and what it isn't.");
         }
@@ -78,10 +88,19 @@ public class AuthController {
                 .body(new LoginResponse(jwtService.issueToken(user.getUsername(), user.getRole()), user.getRole(), user.getUsername()));
     }
 
+    /** A fresh token for the sign-up form (see SignupGuard). */
+    @GetMapping("/api/auth/signup-form")
+    public SignupForm signupForm() {
+        if (!hosting.signupEnabled()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Sign-up is not enabled on this server");
+        }
+        return new SignupForm(signupGuard.issue());
+    }
+
     /** What the sign-in page needs to know before anyone is signed in. */
     @GetMapping("/api/auth/config")
     public PublicConfig config() {
-        return new PublicConfig(hosting.publicMode(), hosting.signupEnabled(), SignupRules.MIN_PASSWORD);
+        return new PublicConfig(hosting.publicMode(), hosting.signupEnabled(), SignupRules.MIN_PASSWORD, maxUploadMb);
     }
 
     private static ResponseEntity<Object> error(HttpStatus status, String message) {
@@ -91,12 +110,16 @@ public class AuthController {
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {
     }
 
-    public record SignupRequest(String username, String password, boolean acceptedTerms) {
+    /** formToken comes from /api/auth/signup-form; website is a hidden field people leave empty. */
+    public record SignupRequest(String username, String password, boolean acceptedTerms, String formToken, String website) {
+    }
+
+    public record SignupForm(String token) {
     }
 
     public record LoginResponse(String token, Role role, String username) {
     }
 
-    public record PublicConfig(boolean publicMode, boolean signupEnabled, int minPasswordLength) {
+    public record PublicConfig(boolean publicMode, boolean signupEnabled, int minPasswordLength, long maxUploadMb) {
     }
 }

@@ -113,7 +113,8 @@ development settings", a value in `.env` is missing or too short.
 | Update to the latest code | `git pull && docker compose -f docker-compose.public.yml up -d --build` |
 | See logs | `docker compose -f docker-compose.public.yml logs -f backend` |
 | Restart | `docker compose -f docker-compose.public.yml restart` |
-| Back up the database | `docker compose -f docker-compose.public.yml exec db pg_dump -U mentalist mentalist > backup.sql` |
+| Back up now | `./deploy/public/backup.sh` (database + uploads to `~/mentalist-backups`) |
+| Nightly backups | see the first lines of `deploy/public/backup.sh` (one `crontab` line) |
 | Change limits or passwords | edit `.env`, then `docker compose -f docker-compose.public.yml up -d` |
 | Stop everything | `docker compose -f docker-compose.public.yml down` (data is kept in volumes) |
 
@@ -132,6 +133,16 @@ development settings", a value in `.env` is missing or too short.
 - **Account deletion:** people can delete their account with all their
   reports, files and health checks from *Your account*.
 - **Sign-in:** 10 failed attempts per address per 15 minutes.
+- **Bot protection on sign-up** (no third-party CAPTCHA): a signed form token,
+  a minimum fill time and a hidden field that only bots fill in.
+- **Uploads:** 60 MB per report on this server (`REPORTS_MAX_UPLOAD_MB`), PDFs of
+  at most 1,000 pages, images up to 50 megapixels, and Office files that would
+  unpack to far more than their size ("zip bombs") are refused before parsing.
+- **Official filings** are downloaded only from filings.xbrl.org (redirects
+  elsewhere are refused), one company at a time, with a size cap while reading.
+- **Browser hardening:** Caddy sends a strict Content-Security-Policy (only the
+  site's own scripts can run), HSTS, no framing and no MIME sniffing.
+  Check it at securityheaders.com once the site is live.
 - **The backend refuses to start** with the development secrets from GitHub.
 - Only Caddy (80/443) is exposed; the database, queue, Ollama and metrics
   stay on Docker's private network.
